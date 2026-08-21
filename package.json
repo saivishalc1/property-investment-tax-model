@@ -1,0 +1,21 @@
+{
+  "name": "property-investment-tax-model",
+  "version": "3.0.0",
+  "private": true,
+  "description": "Deterministic New York investment-property tax and returns planning model. Static site, no build step, no network calls.",
+  "type": "module",
+  "license": "SEE LICENSE IN LICENSE",
+  "scripts": {
+    "test": "node --test \"tests/unit/**/*.test.js\"",
+    "test:e2e": "playwright test",
+    "serve": "node tools/serve.js 4173",
+    "serve:subpath": "node tools/serve.js 4174 /property-investment-tax-model",
+    "build": "node tools/build.js",
+    "check": "npm run build && npm test"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.10.0",
+    "@playwright/test": "^1.47.0"
+  },
+  "engines": { "node": ">=20" }
+}
