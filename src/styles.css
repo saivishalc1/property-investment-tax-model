@@ -450,6 +450,7 @@ caption {
   text-align: left; font-weight: 600; padding-bottom: var(--sp2); color: var(--text);
 }
 caption .caption-note { display: block; font-weight: 400; font-size: var(--step-1); color: var(--text-2); }
+caption.caption-flush { padding-bottom: 0; }
 th, td { padding: 9px var(--sp3); text-align: right; border-bottom: 1px solid var(--line); }
 th[scope="row"], td:first-child, th:first-child { text-align: left; }
 thead th {

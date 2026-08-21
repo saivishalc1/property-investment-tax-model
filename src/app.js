@@ -242,10 +242,15 @@ function renderValidation() {
  * Render rows into a table.
  * A row is { label, value, cls, kind } where kind is 'group' | 'total' | 'sub'.
  */
-function renderTable(table, caption, rows, note) {
+function renderTable(table, caption, rows, note, hideCaption) {
   clear(table);
   if (caption) {
-    const cap = el('caption', { text: caption });
+    // The caption is the table's accessible name and is always present. Inside
+    // a card whose heading already says the same thing, the title is hidden
+    // visually so sighted users do not read the same words twice — but any
+    // explanatory note stays on screen.
+    const cap = el('caption', { class: hideCaption && !note ? 'caption-flush' : '' });
+    cap.appendChild(el('span', { class: hideCaption ? 'visually-hidden' : '', text: caption }));
     if (note) cap.appendChild(el('span', { class: 'caption-note', text: note }));
     table.appendChild(cap);
   }
@@ -386,7 +391,7 @@ function renderPropertyStep() {
     { label: labels.mrt || 'Mortgage recording tax', value: money(p.mortgageRecordingTax) },
     { label: 'Rate applied to the loan', value: pct(p.mrtRate, 3), kind: 'sub' },
     { label: 'Transaction taxes you pay at closing', value: money(p.buyerTransfer + p.mansionTax + p.mortgageRecordingTax), kind: 'total' },
-  ], S.purchase.propType === 'coop' ? 'Co-op shares are personal property, so mortgage recording tax and title insurance do not apply.' : null);
+  ], S.purchase.propType === 'coop' ? 'Co-op shares are personal property, so mortgage recording tax and title insurance do not apply.' : null, true);
 
   const marginalNote = S.rates.marginalBrackets
     ? 'Brackets are marginal: each slice of price is taxed at its own rate.'
@@ -421,7 +426,7 @@ function renderFinancingStep() {
     { kind: 'group', label: 'At the end of the hold' },
     { label: `Balance owing after ${h.years} years`, value: money(h.loanBalanceAtSale) },
     { label: 'Interest paid over the hold', value: money(h.table.reduce((s, y) => s + y.interest, 0)) },
-  ]);
+  ], null, true);
 
   const r = num(S.purchase.loanRate) / 100 / 12;
   renderFormula($('#financeFormula'), [
@@ -460,7 +465,7 @@ function renderOperationsStep() {
     { label: 'Less capital improvements this year', value: money(-y1.capexCash), cls: y1.capexCash ? 'neg' : '' },
     { label: 'Cash flow before tax', value: money(y1.preTaxCF), kind: 'total', cls: signClass(y1.preTaxCF) },
     { label: 'Debt service coverage ratio', value: y1.dscr === null ? 'no debt' : y1.dscr.toFixed(2) + '×', kind: 'sub' },
-  ]);
+  ], null, true);
 
   renderFormula($('#opsFormula'), [
     `Gross rent      = ${money(num(S.hold.rentMo))} × 12 + ${money(num(S.hold.otherIncomeYr))} other = ${money(y1.grossRent)}`,
@@ -693,7 +698,7 @@ function renderResultsStep() {
     { label: 'Subtotal loan costs', value: money(p.financingCosts), kind: 'total' },
     { kind: 'group', label: '' },
     { label: 'Total cash required to close', value: money(p.cashAtClosing), kind: 'total' },
-  ]);
+  ], null, true);
   renderFormula($('#cashFormula'), [
     `down payment  = ${money(p.price)} × ${pct(num(S.purchase.downPct))} = ${money(p.downPayment)}`,
     `basis costs   = ${money(p.basisCosts)}`,
@@ -747,7 +752,7 @@ function renderResultsStep() {
       flows.map((f, i) => ({
         label: `Year ${i + 1}` + (f.final ? ' (includes sale)' : ''),
         value: money(f.value), cls: signClass(f.value),
-      }))));
+      }))), null, true);
 
   // ---- depreciation & passive losses ----
   renderTable($('#depTable'), 'Depreciation and suspended losses', [
@@ -767,7 +772,7 @@ function renderResultsStep() {
     { label: 'Suspended losses carried to the sale', value: money(h.suspendedAtSale) },
     { label: 'Released on a fully taxable disposition', value: money(s.releasedLosses) },
     { label: 'Tax benefit at your ordinary rate', value: money(s.releasedLossTaxBenefit), cls: 'pos', kind: 'total' },
-  ], 'Suspended losses are released against ordinary income. They are never netted against the capital gain or the depreciation recapture before those are taxed.');
+  ], 'Suspended losses are released against ordinary income. They are never netted against the capital gain or the depreciation recapture before those are taxed.', true);
 
   renderFormula($('#depFormula'), [
     `depreciable basis = cost basis − land = ${money(p.costBasis)} − ${money(p.landValue)} = ${money(p.depreciableBasis)}`,
@@ -813,7 +818,7 @@ function renderResultsStep() {
     { label: 'Plus benefit of released passive losses', value: money(s.releasedLossTaxBenefit), cls: 'pos' },
     s.lossTaxBenefit > 0 ? { label: 'Plus benefit of the §1231 loss on sale', value: money(s.lossTaxBenefit), cls: 'pos' } : null,
     { label: 'Net proceeds to you', value: money(s.netProceeds), kind: 'total', cls: signClass(s.netProceeds) },
-  ]);
+  ], null, true);
   renderFormula($('#saleFormula'), [
     s.usedOverride
       ? `sale price      = ${money(s.salePrice)} (you entered this)`
@@ -841,7 +846,7 @@ function renderResultsStep() {
     { label: 'Effective rate on the gain', value: pct(s.effectiveGainRate), kind: 'sub' },
     { kind: 'group', label: 'Separately, at your ordinary rate' },
     { label: `Released passive losses — ${money(s.releasedLosses)} at ${pct(h.ordinaryRate)}`, value: money(-s.releasedLossTaxBenefit), cls: 'pos' },
-  ], 'Transaction taxes on the sale (transfer tax, flip tax) sit in selling costs above, not here — they reduce the gain rather than being levied on it.');
+  ], 'Transaction taxes on the sale (transfer tax, flip tax) sit in selling costs above, not here — they reduce the gain rather than being levied on it.', true);
 
   renderFormula($('#saleTaxFormula'), [
     `NIIT threshold for ${filingLabel()} = ${money(s.niitThreshold)}`,
@@ -876,7 +881,7 @@ function renderResultsStep() {
     { label: 'Tax on the sale', value: money(s.totalSaleTax) },
     { label: 'Less benefit of released losses', value: money(-s.releasedLossTaxBenefit), cls: 'pos' },
     { label: 'Total tax paid', value: money(rt.totalTaxPaid), kind: 'total' },
-  ]);
+  ], null, true);
   renderFormula($('#returnsFormula'), [
     `total profit = cumulative after-tax cash flow + net proceeds − cash invested`,
     `             = ${money(h.cumAfterTaxCF)} + ${money(s.netProceeds)} − ${money(rt.cashInvested)} = ${money(rt.totalProfit)}`,
