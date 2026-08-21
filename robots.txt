@@ -1,0 +1,7 @@
+# Property Investment Tax Model — public static site, no user data.
+User-agent: *
+Allow: /
+
+# No sitemap URL is declared here because the host depends on where the site is
+# deployed (a user site, a project subpath, or a custom domain). The generated
+# sitemap lives at ./sitemap.xml alongside this file.
