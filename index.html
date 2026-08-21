@@ -1,0 +1,949 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Content Security Policy.
+     'none' by default: no scripts, styles, images, fonts or connections other
+     than this site's own files. connect-src 'none' is the load-bearing one —
+     it makes it impossible for this page to transmit anything the user types.
+     frame-ancestors is deliberately absent: browsers ignore it in a <meta> tag
+     and log an error. It has to be sent as a response header, which GitHub
+     Pages cannot do; see README § Security. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'none'; form-action 'none'; base-uri 'none'; object-src 'none'; manifest-src 'self'">
+<title>Property Investment Tax Model — New York investment property planner</title>
+<meta name="description" content="A deterministic, offline planning model for New York investment property: purchase and transfer taxes, financing, rental operations, depreciation, passive losses, taxable sale, §1031 comparison, ROI and after-tax IRR.">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#f7f7f5" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#101113" media="(prefers-color-scheme: dark)">
+<meta name="robots" content="index, follow">
+<meta property="og:title" content="Property Investment Tax Model">
+<meta property="og:description" content="Deterministic New York investment-property tax and returns planner. Runs entirely in your browser.">
+<meta property="og:type" content="website">
+<link rel="icon" href="./assets/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="./assets/icon-180.png">
+<link rel="manifest" href="./assets/site.webmanifest">
+<link rel="stylesheet" href="./src/styles.css">
+</head>
+<body>
+
+<a class="skip-link" href="#main">Skip to main content</a>
+
+<header class="app-header no-print">
+  <div class="header-inner">
+    <div class="brand">
+      <span class="brand-mark">Property Investment Tax Model</span>
+      <span class="brand-sub" id="brandScenario">Untitled scenario</span>
+    </div>
+    <div class="header-spacer"></div>
+    <div class="header-tools">
+      <div class="segmented" role="group" aria-label="Detail level">
+        <button type="button" id="modeQuick" aria-pressed="true">Quick estimate</button>
+        <button type="button" id="modePro" aria-pressed="false">Professional</button>
+      </div>
+      <button type="button" class="btn btn-sm" id="scenarioBtn" aria-haspopup="dialog">Scenarios</button>
+      <button type="button" class="btn btn-sm" id="themeBtn" aria-pressed="false">
+        <span aria-hidden="true">◐</span><span class="visually-hidden">Toggle dark theme</span>
+      </button>
+    </div>
+  </div>
+</header>
+
+<div class="shell">
+
+  <!-- ================= step navigation ================= -->
+  <nav class="stepnav no-print" aria-label="Analysis steps">
+    <h2 id="stepnavHeading">Steps</h2>
+    <ol id="stepList">
+      <li><button type="button" data-step="property"><span class="stepnum">1</span> Property</button></li>
+      <li><button type="button" data-step="financing"><span class="stepnum">2</span> Financing</button></li>
+      <li><button type="button" data-step="operations"><span class="stepnum">3</span> Rental operations</button></li>
+      <li><button type="button" data-step="profile"><span class="stepnum">4</span> Your tax profile</button></li>
+      <li><button type="button" data-step="sale"><span class="stepnum">5</span> Sale assumptions</button></li>
+      <li><button type="button" data-step="results"><span class="stepnum">6</span> Results</button></li>
+      <li><button type="button" data-step="compare"><span class="stepnum">7</span> Comparisons</button></li>
+      <li><button type="button" data-step="report"><span class="stepnum">8</span> Report</button></li>
+    </ol>
+  </nav>
+
+  <!-- ================= main ================= -->
+  <main id="main" tabindex="-1">
+
+    <div id="errorSummary" class="callout error error-summary no-print" role="alert" tabindex="-1" hidden>
+      <h4 id="errorSummaryTitle">Check these entries</h4>
+      <ol id="errorSummaryList"></ol>
+    </div>
+    <div id="warningSummary" class="callout warn no-print" hidden>
+      <h4>Assumptions worth knowing about</h4>
+      <ul id="warningList"></ul>
+    </div>
+
+    <p class="visually-hidden" id="liveStatus" role="status" aria-live="polite"></p>
+
+    <!-- ---------- 1. Property ---------- -->
+    <section class="panel" id="panel-property" aria-labelledby="h-property">
+      <div class="panel-head">
+        <span class="eyebrow">Step 1 of 8</span>
+        <h1 id="h-property">The property</h1>
+        <p>Where the property is and what you are paying for it. These figures drive every transaction tax and your starting cost basis.</p>
+      </div>
+
+      <div class="card">
+        <h3>Location and type</h3>
+        <p class="card-hint">The market sets the transfer taxes, income tax rates and depreciation life used everywhere else in the model.</p>
+
+        <div class="field">
+          <label for="f-preset">Market</label>
+          <div class="control"><select id="f-preset" data-bind="meta.preset"></select></div>
+          <p class="help" id="presetStatusLine"></p>
+        </div>
+
+        <fieldset>
+          <legend>Property type</legend>
+          <div class="radio-row" role="radiogroup" aria-label="Property type">
+            <label><input type="radio" name="propType" value="residential" data-bind-radio="purchase.propType"> Residential (condo, house, multi-family)</label>
+            <label><input type="radio" name="propType" value="coop" data-bind-radio="purchase.propType"> Co-op apartment</label>
+            <label><input type="radio" name="propType" value="commercial" data-bind-radio="purchase.propType"> Commercial</label>
+          </div>
+          <p class="help" id="propTypeHelp">Co-op shares are personal property: no title insurance and no mortgage recording tax, but a flip tax on sale. Commercial property depreciates over 39 years instead of 27.5.</p>
+        </fieldset>
+
+        <div class="field">
+          <label for="f-price">Purchase price</label>
+          <div class="control">
+            <span class="affix prefix" data-currency>$</span>
+            <input type="number" id="f-price" data-bind="purchase.price" step="1000" min="0" inputmode="decimal" aria-describedby="f-price-help f-price-err">
+          </div>
+          <p class="help" id="f-price-help">The contract price before any closing costs.</p>
+          <p class="field-error" id="f-price-err"></p>
+        </div>
+
+        <div class="field">
+          <div class="field-label">
+            <label for="f-landPct">Share of value that is land</label>
+            <span class="tip">
+              <button type="button" class="tip-btn" aria-expanded="false" aria-controls="tip-land">?</button>
+              <span class="tip-body" id="tip-land" hidden>Land never wears out, so it cannot be depreciated. Only the building portion of your cost basis generates a depreciation deduction. Your property tax assessment usually shows a land and improvement split; 20–30% is typical in New York City.</span>
+            </span>
+          </div>
+          <div class="control">
+            <input type="number" id="f-landPct" data-bind="purchase.landPct" step="1" min="0" max="100" inputmode="decimal" aria-describedby="f-landPct-err">
+            <span class="affix suffix">%</span>
+          </div>
+          <p class="field-error" id="f-landPct-err"></p>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Closing costs you pay as buyer</h3>
+        <p class="card-hint">Acquisition costs are added to your cost basis, which lowers the taxable gain when you sell. Loan costs are treated separately.</p>
+
+        <div class="card-grid">
+          <div>
+            <div class="field">
+              <label for="f-titlePct">Title insurance</label>
+              <div class="control">
+                <input type="number" id="f-titlePct" data-bind="purchase.titlePct" step="0.05" min="0" inputmode="decimal" aria-describedby="f-titlePct-err">
+                <span class="affix suffix">% of price</span>
+              </div>
+              <p class="field-error" id="f-titlePct-err"></p>
+            </div>
+            <div class="field">
+              <label for="f-legal">Legal fees</label>
+              <div class="control">
+                <span class="affix prefix" data-currency>$</span>
+                <input type="number" id="f-legal" data-bind="purchase.legal" step="250" min="0" inputmode="decimal" aria-describedby="f-legal-err">
+              </div>
+              <p class="field-error" id="f-legal-err"></p>
+            </div>
+          </div>
+          <div>
+            <div class="field">
+              <label for="f-inspection">Inspection and appraisal</label>
+              <div class="control">
+                <span class="affix prefix" data-currency>$</span>
+                <input type="number" id="f-inspection" data-bind="purchase.inspection" step="100" min="0" inputmode="decimal" aria-describedby="f-inspection-err">
+              </div>
+              <p class="field-error" id="f-inspection-err"></p>
+            </div>
+            <div class="field">
+              <label for="f-otherBuy">Other buyer costs</label>
+              <div class="control">
+                <span class="affix prefix" data-currency>$</span>
+                <input type="number" id="f-otherBuy" data-bind="purchase.otherBuy" step="250" min="0" inputmode="decimal" aria-describedby="f-otherBuy-err">
+              </div>
+              <p class="field-error" id="f-otherBuy-err"></p>
+            </div>
+          </div>
+        </div>
+
+        <fieldset>
+          <legend>Who pays the transfer tax at purchase?</legend>
+          <div class="radio-row">
+            <label><input type="radio" name="buyTransfer" value="seller" data-bind-radio="purchase.transferTaxPayer"> Seller (standard in New York)</label>
+            <label><input type="radio" name="buyTransfer" value="buyer" data-bind-radio="purchase.transferTaxPayer"> Buyer</label>
+          </div>
+          <p class="help">On new construction and sponsor sales the buyer usually absorbs the New York State and New York City transfer tax. When the buyer pays, it capitalises into your cost basis.</p>
+        </fieldset>
+      </div>
+
+      <div class="card" data-mode="pro" hidden>
+        <h3>Transaction taxes at this price</h3>
+        <div class="table-scroll" tabindex="0"><table id="buyTaxTable"></table></div>
+        <details class="how"><summary>How calculated</summary><div class="formula" id="buyTaxFormula"></div></details>
+      </div>
+
+      <div class="step-actions no-print">
+        <span></span>
+        <button type="button" class="btn btn-primary" data-goto="financing">Next: Financing</button>
+      </div>
+    </section>
+
+    <!-- ---------- 2. Financing ---------- -->
+    <section class="panel" id="panel-financing" aria-labelledby="h-financing" hidden>
+      <div class="panel-head">
+        <span class="eyebrow">Step 2 of 8</span>
+        <h1 id="h-financing">Financing</h1>
+        <p>How much you borrow, at what rate, and for how long. This sets your cash at closing, your monthly payment and how much interest you can deduct.</p>
+      </div>
+
+      <div class="card">
+        <h3>The loan</h3>
+        <div class="card-grid">
+          <div>
+            <div class="field">
+              <label for="f-downPct">Down payment</label>
+              <div class="control">
+                <input type="number" id="f-downPct" data-bind="purchase.downPct" step="1" min="0" max="100" inputmode="decimal" aria-describedby="f-downPct-help f-downPct-err">
+                <span class="affix suffix">%</span>
+              </div>
+              <p class="help" id="f-downPct-help">100% means an all-cash purchase.</p>
+              <p class="field-error" id="f-downPct-err"></p>
+            </div>
+            <div class="field">
+              <label for="f-loanRate">Interest rate</label>
+              <div class="control">
+                <input type="number" id="f-loanRate" data-bind="purchase.loanRate" step="0.05" min="0" max="30" inputmode="decimal" aria-describedby="f-loanRate-err">
+                <span class="affix suffix">% a year</span>
+              </div>
+              <p class="field-error" id="f-loanRate-err"></p>
+            </div>
+          </div>
+          <div>
+            <div class="field">
+              <label for="f-loanTermYrs">Loan term</label>
+              <div class="control">
+                <input type="number" id="f-loanTermYrs" data-bind="purchase.loanTermYrs" step="1" min="1" max="50" inputmode="numeric" aria-describedby="f-loanTermYrs-err">
+                <span class="affix suffix">years</span>
+              </div>
+              <p class="field-error" id="f-loanTermYrs-err"></p>
+            </div>
+            <div class="field">
+              <div class="field-label">
+                <label for="f-ioYears">Interest-only period</label>
+                <span class="tip">
+                  <button type="button" class="tip-btn" aria-expanded="false" aria-controls="tip-io">?</button>
+                  <span class="tip-body" id="tip-io" hidden>During an interest-only period you pay interest and nothing else, so the balance does not fall. When the period ends the payment steps up, because the original balance now has to be repaid over the shorter remaining term.</span>
+                </span>
+              </div>
+              <div class="control">
+                <input type="number" id="f-ioYears" data-bind="purchase.ioYears" step="1" min="0" inputmode="numeric" aria-describedby="f-ioYears-err">
+                <span class="affix suffix">years</span>
+              </div>
+              <p class="field-error" id="f-ioYears-err"></p>
+            </div>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="f-pointsPct">Origination points</label>
+          <div class="control">
+            <input type="number" id="f-pointsPct" data-bind="purchase.pointsPct" step="0.25" min="0" inputmode="decimal" aria-describedby="f-pointsPct-help f-pointsPct-err">
+            <span class="affix suffix">% of loan</span>
+          </div>
+          <p class="help" id="f-pointsPct-help">On a rental property, points are deducted a little each year over the life of the loan, not all at once.</p>
+          <p class="field-error" id="f-pointsPct-err"></p>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>What this loan costs you</h3>
+        <div class="table-scroll" tabindex="0"><table id="financeTable"></table></div>
+        <details class="how"><summary>How calculated</summary><div class="formula" id="financeFormula"></div></details>
+      </div>
+
+      <div class="step-actions no-print">
+        <button type="button" class="btn" data-goto="property">Back</button>
+        <button type="button" class="btn btn-primary" data-goto="operations">Next: Rental operations</button>
+      </div>
+    </section>
+
+    <!-- ---------- 3. Rental operations ---------- -->
+    <section class="panel" id="panel-operations" aria-labelledby="h-operations" hidden>
+      <div class="panel-head">
+        <span class="eyebrow">Step 3 of 8</span>
+        <h1 id="h-operations">Rental operations</h1>
+        <p>What the property earns and what it costs to run, year by year, for as long as you hold it.</p>
+      </div>
+
+      <div class="card">
+        <h3>Income</h3>
+        <div class="card-grid">
+          <div>
+            <div class="field">
+              <label for="f-rentMo">Monthly rent</label>
+              <div class="control">
+                <span class="affix prefix" data-currency>$</span>
+                <input type="number" id="f-rentMo" data-bind="hold.rentMo" step="50" min="0" inputmode="decimal" aria-describedby="f-rentMo-err">
+              </div>
+              <p class="field-error" id="f-rentMo-err"></p>
+            </div>
+            <div class="field">
+              <label for="f-vacancyPct">Vacancy and non-payment</label>
+              <div class="control">
+                <input type="number" id="f-vacancyPct" data-bind="hold.vacancyPct" step="0.5" min="0" max="100" inputmode="decimal" aria-describedby="f-vacancyPct-help f-vacancyPct-err">
+                <span class="affix suffix">% of rent</span>
+              </div>
+              <p class="help" id="f-vacancyPct-help">The share of the year you expect the unit to be empty or the rent uncollected.</p>
+              <p class="field-error" id="f-vacancyPct-err"></p>
+            </div>
+          </div>
+          <div>
+            <div class="field">
+              <label for="f-otherIncomeYr">Other income a year</label>
+              <div class="control">
+                <span class="affix prefix" data-currency>$</span>
+                <input type="number" id="f-otherIncomeYr" data-bind="hold.otherIncomeYr" step="100" min="0" inputmode="decimal" aria-describedby="f-otherIncomeYr-help f-otherIncomeYr-err">
+              </div>
+              <p class="help" id="f-otherIncomeYr-help">Parking, storage, laundry, pet rent.</p>
+              <p class="field-error" id="f-otherIncomeYr-err"></p>
+            </div>
+            <div class="field">
+              <label for="f-rentGrowthPct">Rent growth a year</label>
+              <div class="control">
+                <input type="number" id="f-rentGrowthPct" data-bind="hold.rentGrowthPct" step="0.25" inputmode="decimal" aria-describedby="f-rentGrowthPct-err">
+                <span class="affix suffix">%</span>
+              </div>
+              <p class="field-error" id="f-rentGrowthPct-err"></p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Operating expenses</h3>
+        <p class="card-hint">Everything except the mortgage payment. Net operating income is rent after vacancy, less these costs.</p>
+        <div class="card-grid">
+          <div>
+            <div class="field">
+              <label for="f-propTaxYr">Property tax a year</label>
+              <div class="control">
+                <span class="affix prefix" data-currency>$</span>
+                <input type="number" id="f-propTaxYr" data-bind="hold.propTaxYr" step="250" min="0" inputmode="decimal" aria-describedby="f-propTaxYr-err">
+              </div>
+              <p class="field-error" id="f-propTaxYr-err"></p>
+            </div>
+            <div class="field">
+              <label for="f-insuranceYr">Insurance a year</label>
+              <div class="control">
+                <span class="affix prefix" data-currency>$</span>
+                <input type="number" id="f-insuranceYr" data-bind="hold.insuranceYr" step="100" min="0" inputmode="decimal" aria-describedby="f-insuranceYr-err">
+              </div>
+              <p class="field-error" id="f-insuranceYr-err"></p>
+            </div>
+            <div class="field">
+              <label for="f-hoaMo">HOA or common charges a month</label>
+              <div class="control">
+                <span class="affix prefix" data-currency>$</span>
+                <input type="number" id="f-hoaMo" data-bind="hold.hoaMo" step="25" min="0" inputmode="decimal" aria-describedby="f-hoaMo-err">
+              </div>
+              <p class="field-error" id="f-hoaMo-err"></p>
+            </div>
+          </div>
+          <div>
+            <div class="field">
+              <label for="f-maintPct">Repairs and maintenance</label>
+              <div class="control">
+                <input type="number" id="f-maintPct" data-bind="hold.maintPct" step="0.5" min="0" max="100" inputmode="decimal" aria-describedby="f-maintPct-err">
+                <span class="affix suffix">% of rent</span>
+              </div>
+              <p class="field-error" id="f-maintPct-err"></p>
+            </div>
+            <div class="field">
+              <label for="f-mgmtPct">Property management</label>
+              <div class="control">
+                <input type="number" id="f-mgmtPct" data-bind="hold.mgmtPct" step="0.5" min="0" max="100" inputmode="decimal" aria-describedby="f-mgmtPct-err">
+                <span class="affix suffix">% collected</span>
+              </div>
+              <p class="field-error" id="f-mgmtPct-err"></p>
+            </div>
+            <div class="field">
+              <label for="f-opexGrowthPct">Expense inflation a year</label>
+              <div class="control">
+                <input type="number" id="f-opexGrowthPct" data-bind="hold.opexGrowthPct" step="0.25" inputmode="decimal" aria-describedby="f-opexGrowthPct-err">
+                <span class="affix suffix">%</span>
+              </div>
+              <p class="field-error" id="f-opexGrowthPct-err"></p>
+            </div>
+          </div>
+        </div>
+
+        <details class="advanced" data-mode="pro" hidden>
+          <summary>More expense lines</summary>
+          <div class="details-body">
+            <div class="card-grid">
+              <div class="field">
+                <label for="f-utilitiesYr">Utilities a year</label>
+                <div class="control">
+                  <span class="affix prefix" data-currency>$</span>
+                  <input type="number" id="f-utilitiesYr" data-bind="hold.utilitiesYr" step="100" min="0" inputmode="decimal" aria-describedby="f-utilitiesYr-err">
+                </div>
+                <p class="field-error" id="f-utilitiesYr-err"></p>
+              </div>
+              <div class="field">
+                <label for="f-otherOpexYr">Other operating expenses a year</label>
+                <div class="control">
+                  <span class="affix prefix" data-currency>$</span>
+                  <input type="number" id="f-otherOpexYr" data-bind="hold.otherOpexYr" step="100" min="0" inputmode="decimal" aria-describedby="f-otherOpexYr-err">
+                </div>
+                <p class="field-error" id="f-otherOpexYr-err"></p>
+              </div>
+            </div>
+          </div>
+        </details>
+      </div>
+
+      <div class="card">
+        <h3>Hold period and capital improvements</h3>
+        <div class="card-grid">
+          <div>
+            <div class="field">
+              <label for="f-years">How long you plan to hold</label>
+              <div class="control">
+                <input type="number" id="f-years" data-bind="hold.years" step="1" min="1" max="50" inputmode="numeric" aria-describedby="f-years-err">
+                <span class="affix suffix">years</span>
+              </div>
+              <p class="field-error" id="f-years-err"></p>
+            </div>
+            <div class="field">
+              <label for="f-apprPct">Property appreciation a year</label>
+              <div class="control">
+                <input type="number" id="f-apprPct" data-bind="hold.apprPct" step="0.25" inputmode="decimal" aria-describedby="f-apprPct-err">
+                <span class="affix suffix">%</span>
+              </div>
+              <p class="field-error" id="f-apprPct-err"></p>
+            </div>
+          </div>
+          <div>
+            <div class="field">
+              <div class="field-label">
+                <label for="f-capexTotal">Capital improvements</label>
+                <span class="tip">
+                  <button type="button" class="tip-btn" aria-expanded="false" aria-controls="tip-capex">?</button>
+                  <span class="tip-body" id="tip-capex">A new roof, a gut renovation, new windows. Unlike a repair, an improvement is not deducted the year you pay for it: it is added to your basis and depreciated over its own recovery period. The whole amount is depreciable — there is no land in an improvement.</span>
+                </span>
+              </div>
+              <div class="control">
+                <span class="affix prefix" data-currency>$</span>
+                <input type="number" id="f-capexTotal" data-bind="hold.capexTotal" step="1000" min="0" inputmode="decimal" aria-describedby="f-capexTotal-err">
+              </div>
+              <p class="field-error" id="f-capexTotal-err"></p>
+            </div>
+            <div class="field">
+              <label for="f-capexYear">Year the work is completed</label>
+              <div class="control">
+                <input type="number" id="f-capexYear" data-bind="profile.capexYear" step="1" min="1" inputmode="numeric" aria-describedby="f-capexYear-err">
+                <span class="affix suffix">of the hold</span>
+              </div>
+              <p class="field-error" id="f-capexYear-err"></p>
+            </div>
+          </div>
+        </div>
+
+        <details class="advanced" data-mode="pro" hidden>
+          <summary>Improvement timing</summary>
+          <div class="details-body">
+            <fieldset>
+              <legend>When is the money spent?</legend>
+              <div class="radio-row">
+                <label><input type="radio" name="capexTiming" value="lump" data-bind-radio="hold.capexTiming"> All in the year the work is completed</label>
+                <label><input type="radio" name="capexTiming" value="spread" data-bind-radio="hold.capexTiming"> Spread evenly across the hold</label>
+              </div>
+              <p class="help">This changes cash flow timing only. Depreciation always begins when the improvement is placed in service.</p>
+            </fieldset>
+            <div class="field">
+              <label for="f-capexMonth">Month the improvement is placed in service</label>
+              <div class="control">
+                <input type="number" id="f-capexMonth" data-bind="profile.capexMonth" step="1" min="1" max="12" inputmode="numeric" aria-describedby="f-capexMonth-help f-capexMonth-err">
+                <span class="affix suffix">1–12</span>
+              </div>
+              <p class="help" id="f-capexMonth-help">The IRS mid-month convention treats it as placed in service halfway through this month.</p>
+              <p class="field-error" id="f-capexMonth-err"></p>
+            </div>
+          </div>
+        </details>
+      </div>
+
+      <div class="card">
+        <h3>Year one at a glance</h3>
+        <div class="table-scroll" tabindex="0"><table id="opsTable"></table></div>
+        <details class="how"><summary>How calculated</summary><div class="formula" id="opsFormula"></div></details>
+      </div>
+
+      <div class="step-actions no-print">
+        <button type="button" class="btn" data-goto="financing">Back</button>
+        <button type="button" class="btn btn-primary" data-goto="profile">Next: Your tax profile</button>
+      </div>
+    </section>
+
+    <!-- ---------- 4. Investor tax profile ---------- -->
+    <section class="panel" id="panel-profile" aria-labelledby="h-profile" hidden>
+      <div class="panel-head">
+        <span class="eyebrow">Step 4 of 8</span>
+        <h1 id="h-profile">Your tax profile</h1>
+        <p>Your own tax position decides how the property's income and gain are taxed. Nothing here is stored anywhere but this browser.</p>
+      </div>
+
+      <div class="card">
+        <h3>Who is buying</h3>
+        <div class="field">
+          <label for="f-filingStatus">Filing status</label>
+          <div class="control">
+            <select id="f-filingStatus" data-bind="profile.filingStatus" aria-describedby="f-filingStatus-help">
+              <option value="single">Single or head of household</option>
+              <option value="mfj">Married filing jointly</option>
+              <option value="mfs">Married filing separately</option>
+            </select>
+          </div>
+          <p class="help" id="f-filingStatus-help">Sets the income threshold above which the 3.8% net investment income tax applies.</p>
+        </div>
+
+        <div class="field">
+          <div class="field-label">
+            <label for="f-otherMAGI">Your other income before this property</label>
+            <span class="tip">
+              <button type="button" class="tip-btn" aria-expanded="false" aria-controls="tip-magi">?</button>
+              <span class="tip-body" id="tip-magi" hidden>Modified adjusted gross income from everything else — salary, business income, dividends. It is used only to work out how much of this property's income and gain sits above the net investment income tax threshold.</span>
+            </span>
+          </div>
+          <div class="control">
+            <span class="affix prefix" data-currency>$</span>
+            <input type="number" id="f-otherMAGI" data-bind="profile.otherMAGI" step="5000" min="0" inputmode="decimal" aria-describedby="f-otherMAGI-err">
+          </div>
+          <p class="field-error" id="f-otherMAGI-err"></p>
+        </div>
+
+        <div class="field">
+          <div class="switch-row">
+            <span class="switch-text">
+              <label for="f-nycResident">New York City resident for income tax</label>
+              <span class="help">Turn off if you live outside the five boroughs. NYC resident income tax is around 3.876% on both rent and gains, and non-residents do not pay it.</span>
+            </span>
+            <input type="checkbox" class="switch" id="f-nycResident" data-bind="profile.nycResident">
+          </div>
+        </div>
+
+        <div class="field">
+          <div class="switch-row">
+            <span class="switch-text">
+              <label for="f-passiveAllowed">Deduct rental losses in the year they arise</label>
+              <span class="help">Usually off. Under US §469 a rental loss is passive: it is suspended and carried forward, then released in full when you sell. Turn this on only if you qualify as a real estate professional or have offsetting passive income.</span>
+            </span>
+            <input type="checkbox" class="switch" id="f-passiveAllowed" data-bind="hold.passiveAllowed">
+          </div>
+        </div>
+      </div>
+
+      <div class="card" data-mode="pro" hidden>
+        <h3>Advanced tax settings</h3>
+        <div class="field">
+          <label for="f-serviceMonth">Month the property is placed in service</label>
+          <div class="control">
+            <input type="number" id="f-serviceMonth" data-bind="profile.serviceMonth" step="1" min="1" max="12" inputmode="numeric" aria-describedby="f-serviceMonth-help f-serviceMonth-err">
+            <span class="affix suffix">1–12</span>
+          </div>
+          <p class="help" id="f-serviceMonth-help">The IRS mid-month convention gives you half a month of depreciation in the month it is first available to rent.</p>
+          <p class="field-error" id="f-serviceMonth-err"></p>
+        </div>
+        <div class="field">
+          <label for="f-ownerType">Ownership structure</label>
+          <div class="control">
+            <select id="f-ownerType" data-bind="profile.ownerType">
+              <option value="individual">Individual</option>
+              <option value="partnership">Partnership or LLC (pass-through)</option>
+              <option value="corporation">Corporation</option>
+            </select>
+          </div>
+        </div>
+        <div class="field">
+          <div class="switch-row">
+            <span class="switch-text">
+              <label for="f-usTaxResident">US tax resident</label>
+              <span class="help">FIRPTA withholding and treaty relief for non-residents are not modelled.</span>
+            </span>
+            <input type="checkbox" class="switch" id="f-usTaxResident" data-bind="profile.usTaxResident">
+          </div>
+        </div>
+        <div class="field">
+          <div class="switch-row">
+            <span class="switch-text">
+              <label for="f-fullDisposition">Fully taxable disposition to an unrelated buyer</label>
+              <span class="help">Required by §469(g) before suspended losses are released on sale.</span>
+            </span>
+            <input type="checkbox" class="switch" id="f-fullDisposition" data-bind="profile.fullDisposition">
+          </div>
+        </div>
+        <div class="field">
+          <div class="switch-row">
+            <span class="switch-text">
+              <label for="f-niitOnRental">Apply the net investment income tax to rental income</label>
+              <span class="help">Net rental income is investment income under §1411. Turn off if you materially participate in a real property trade or business.</span>
+            </span>
+            <input type="checkbox" class="switch" id="f-niitOnRental" data-bind="profile.niitOnRental">
+          </div>
+        </div>
+      </div>
+
+      <div class="card" data-mode="pro" hidden>
+        <h3>Tax rates used</h3>
+        <p class="card-hint">Every rate below is editable. Changing one changes the model immediately and nothing is silently overwritten.</p>
+        <div id="rateFields"></div>
+        <details class="advanced">
+          <summary>Bracket tables</summary>
+          <div class="details-body" id="bracketEditors"></div>
+        </details>
+      </div>
+
+      <div class="card">
+        <h3>Where these numbers come from</h3>
+        <div id="sourcesBlock"></div>
+      </div>
+
+      <div class="step-actions no-print">
+        <button type="button" class="btn" data-goto="operations">Back</button>
+        <button type="button" class="btn btn-primary" data-goto="sale">Next: Sale assumptions</button>
+      </div>
+    </section>
+
+    <!-- ---------- 5. Sale ---------- -->
+    <section class="panel" id="panel-sale" aria-labelledby="h-sale" hidden>
+      <div class="panel-head">
+        <span class="eyebrow">Step 5 of 8</span>
+        <h1 id="h-sale">Sale assumptions</h1>
+        <p>What you expect to sell for and what it costs to get out.</p>
+      </div>
+
+      <div class="card">
+        <h3>Sale price</h3>
+        <div class="field">
+          <div class="switch-row">
+            <span class="switch-text">
+              <label for="f-useOverride">Use a specific sale price</label>
+              <span class="help">Otherwise the sale price is projected from the appreciation rate you set in step 3.</span>
+            </span>
+            <input type="checkbox" class="switch" id="f-useOverride" data-bind="sale.useOverride">
+          </div>
+        </div>
+        <div class="field" id="overridePriceField">
+          <label for="f-overridePrice">Sale price</label>
+          <div class="control">
+            <span class="affix prefix" data-currency>$</span>
+            <input type="number" id="f-overridePrice" data-bind="sale.overridePrice" step="1000" min="0" inputmode="decimal" aria-describedby="f-overridePrice-err">
+          </div>
+          <p class="field-error" id="f-overridePrice-err"></p>
+        </div>
+        <p class="help" id="projectedPriceNote"></p>
+      </div>
+
+      <div class="card">
+        <h3>Selling costs</h3>
+        <div class="card-grid">
+          <div>
+            <div class="field">
+              <label for="f-brokerPct">Broker commission</label>
+              <div class="control">
+                <input type="number" id="f-brokerPct" data-bind="sale.brokerPct" step="0.25" min="0" inputmode="decimal" aria-describedby="f-brokerPct-err">
+                <span class="affix suffix">%</span>
+              </div>
+              <p class="field-error" id="f-brokerPct-err"></p>
+            </div>
+            <div class="field">
+              <label for="f-sellLegal">Legal and closing</label>
+              <div class="control">
+                <span class="affix prefix" data-currency>$</span>
+                <input type="number" id="f-sellLegal" data-bind="sale.sellLegal" step="250" min="0" inputmode="decimal" aria-describedby="f-sellLegal-err">
+              </div>
+              <p class="field-error" id="f-sellLegal-err"></p>
+            </div>
+          </div>
+          <div>
+            <div class="field" id="flipTaxField" hidden>
+              <label for="f-flipTaxPct">Co-op flip tax</label>
+              <div class="control">
+                <input type="number" id="f-flipTaxPct" data-bind="sale.flipTaxPct" step="0.25" min="0" inputmode="decimal" aria-describedby="f-flipTaxPct-err">
+                <span class="affix suffix">%</span>
+              </div>
+              <p class="field-error" id="f-flipTaxPct-err"></p>
+            </div>
+            <div class="field">
+              <label for="f-otherSell">Other selling costs</label>
+              <div class="control">
+                <span class="affix prefix" data-currency>$</span>
+                <input type="number" id="f-otherSell" data-bind="sale.otherSell" step="250" min="0" inputmode="decimal" aria-describedby="f-otherSell-err">
+              </div>
+              <p class="field-error" id="f-otherSell-err"></p>
+            </div>
+          </div>
+        </div>
+
+        <fieldset>
+          <legend>Who pays the transfer tax on the sale?</legend>
+          <div class="radio-row">
+            <label><input type="radio" name="sellTransfer" value="seller" data-bind-radio="sale.transferTaxPayer"> You, the seller (standard in New York)</label>
+            <label><input type="radio" name="sellTransfer" value="buyer" data-bind-radio="sale.transferTaxPayer"> The buyer</label>
+          </div>
+        </fieldset>
+
+        <details class="advanced" data-mode="pro" hidden>
+          <summary>Timing of the sale</summary>
+          <div class="details-body">
+            <div class="field">
+              <label for="f-saleMonth">Month of the year you sell</label>
+              <div class="control">
+                <input type="number" id="f-saleMonth" data-bind="sale.saleMonth" step="1" min="1" max="12" inputmode="numeric" aria-describedby="f-saleMonth-help f-saleMonth-err">
+                <span class="affix suffix">1–12</span>
+              </div>
+              <p class="help" id="f-saleMonth-help">Depreciation in the year of sale is prorated under the same mid-month convention used in the first year.</p>
+              <p class="field-error" id="f-saleMonth-err"></p>
+            </div>
+          </div>
+        </details>
+      </div>
+
+      <div class="step-actions no-print">
+        <button type="button" class="btn" data-goto="profile">Back</button>
+        <button type="button" class="btn btn-primary" data-goto="results">See results</button>
+      </div>
+    </section>
+
+    <!-- ---------- 6. Results ---------- -->
+    <section class="panel" id="panel-results" aria-labelledby="h-results" hidden>
+      <div class="panel-head">
+        <span class="eyebrow">Step 6 of 8</span>
+        <h1 id="h-results">Results</h1>
+        <p id="resultsIntro"></p>
+      </div>
+
+      <div class="kpi-grid" id="kpiGrid"></div>
+
+      <div class="card">
+        <h3>Cash required to close</h3>
+        <div class="table-scroll" tabindex="0"><table id="cashTable"></table></div>
+        <details class="how"><summary>How calculated</summary><div class="formula" id="cashFormula"></div></details>
+      </div>
+
+      <div class="card">
+        <h3>Operating results</h3>
+        <div class="table-scroll" tabindex="0"><table id="noiTable"></table></div>
+        <details class="how"><summary>How calculated</summary><div class="formula" id="noiFormula"></div></details>
+      </div>
+
+      <div class="card">
+        <h3>Cash flow over the hold</h3>
+        <div class="chart-wrap">
+          <figure class="figure-flush">
+            <div id="cfChart"></div>
+            <figcaption class="help" id="cfChartCaption"></figcaption>
+          </figure>
+          <div class="chart-legend" aria-hidden="true">
+            <span><i class="sw-accent"></i> After-tax cash flow</span>
+            <span><i class="sw-neg"></i> Negative year</span>
+            <span><i class="sw-pos"></i> Includes sale proceeds</span>
+          </div>
+        </div>
+        <details class="how" id="cfTableDetails"><summary>Show the data as a table</summary><div class="table-scroll" tabindex="0"><table id="cfDataTable"></table></div></details>
+      </div>
+
+      <div class="card">
+        <h3>Depreciation and passive losses</h3>
+        <div class="table-scroll" tabindex="0"><table id="depTable"></table></div>
+        <details class="how"><summary>How calculated</summary><div class="formula" id="depFormula"></div></details>
+      </div>
+
+      <div class="card">
+        <h3>The sale</h3>
+        <div class="table-scroll" tabindex="0"><table id="saleTable"></table></div>
+        <details class="how"><summary>How calculated</summary><div class="formula" id="saleFormula"></div></details>
+      </div>
+
+      <div class="card">
+        <h3>Tax on the sale</h3>
+        <p class="card-hint">Each tax is shown separately because each has a different base and a different rate.</p>
+        <div class="table-scroll" tabindex="0"><table id="saleTaxTable"></table></div>
+        <details class="how"><summary>How calculated</summary><div class="formula" id="saleTaxFormula"></div></details>
+      </div>
+
+      <div class="card">
+        <h3>Final returns</h3>
+        <div class="table-scroll" tabindex="0"><table id="returnsTable"></table></div>
+        <details class="how"><summary>How calculated</summary><div class="formula" id="returnsFormula"></div></details>
+      </div>
+
+      <div class="card" data-mode="pro" hidden>
+        <h3>Year-by-year detail</h3>
+        <div class="table-scroll" tabindex="0"><table id="yearlyTable" class="yearly-table"></table></div>
+      </div>
+
+      <div class="step-actions no-print">
+        <button type="button" class="btn" data-goto="sale">Back</button>
+        <button type="button" class="btn btn-primary" data-goto="compare">Next: Comparisons</button>
+      </div>
+    </section>
+
+    <!-- ---------- 7. Comparisons ---------- -->
+    <section class="panel" id="panel-compare" aria-labelledby="h-compare" hidden>
+      <div class="panel-head">
+        <span class="eyebrow">Step 7 of 8</span>
+        <h1 id="h-compare">Comparisons</h1>
+        <p>The same property under different assumptions. Every column is a complete re-run of the model; your own scenario is never changed.</p>
+      </div>
+
+      <div class="card">
+        <h3>Hold period</h3>
+        <div class="field field-narrow">
+          <label for="f-customHold">Add a custom hold period</label>
+          <div class="control">
+            <input type="number" id="f-customHold" step="1" min="1" max="50" inputmode="numeric" value="20">
+            <span class="affix suffix">years</span>
+          </div>
+        </div>
+        <div class="table-scroll" tabindex="0"><table id="holdCompare" class="compare-table"></table></div>
+      </div>
+
+      <div class="card">
+        <h3>Growth assumptions</h3>
+        <div class="table-scroll" tabindex="0"><table id="growthCompare" class="compare-table"></table></div>
+      </div>
+
+      <div class="card">
+        <h3>Financing</h3>
+        <div class="table-scroll" tabindex="0"><table id="financeCompare" class="compare-table"></table></div>
+      </div>
+
+      <div class="card">
+        <h3>Sale price</h3>
+        <div class="table-scroll" tabindex="0"><table id="priceCompare" class="compare-table"></table></div>
+      </div>
+
+      <div class="card">
+        <h3>Taxable sale versus a §1031 exchange</h3>
+        <p class="card-hint">A like-kind exchange defers the tax on the gain into the replacement property. It does not eliminate it, and it does not release suspended passive losses.</p>
+        <div class="table-scroll" tabindex="0"><table id="exchangeCompare" class="compare-table"></table></div>
+        <details class="how"><summary>How calculated</summary><div class="formula" id="exchangeFormula"></div></details>
+      </div>
+
+      <div class="step-actions no-print">
+        <button type="button" class="btn" data-goto="results">Back</button>
+        <button type="button" class="btn btn-primary" data-goto="report">Next: Report</button>
+      </div>
+    </section>
+
+    <!-- ---------- 8. Report ---------- -->
+    <section class="panel" id="panel-report" aria-labelledby="h-report" hidden>
+      <div class="panel-head no-print">
+        <span class="eyebrow">Step 8 of 8</span>
+        <h1 id="h-report">Report</h1>
+        <p>A print-ready US Letter summary. Navigation, buttons and form controls are excluded from the printed page.</p>
+        <div class="step-actions">
+          <button type="button" class="btn" data-goto="compare">Back</button>
+          <button type="button" class="btn btn-primary" id="printBtn">Print or save as PDF</button>
+        </div>
+      </div>
+
+      <article class="report" id="reportRoot" aria-label="Printable report"></article>
+    </section>
+
+  </main>
+
+  <!-- ================= persistent results rail ================= -->
+  <aside class="results-rail no-print" aria-labelledby="railHeading">
+    <div class="summary-card">
+      <header>
+        <h2 id="railHeading">Live summary</h2>
+        <p id="railSub"></p>
+      </header>
+      <ul class="summary-list" id="railList"></ul>
+    </div>
+  </aside>
+</div>
+
+<!-- ================= mobile dock ================= -->
+<details class="results-dock no-print" id="resultsDock">
+  <summary>
+    <span class="dock-item"><span class="k">Cash to close</span><span class="v" id="dockCash">—</span></span>
+    <span class="dock-item"><span class="k">After-tax IRR</span><span class="v" id="dockIrr">—</span></span>
+    <span class="dock-toggle" aria-hidden="true">Details</span>
+  </summary>
+  <div class="dock-body">
+    <ul class="summary-list" id="dockList"></ul>
+  </div>
+</details>
+
+<!-- ================= dialogs ================= -->
+<dialog id="welcomeDialog" aria-labelledby="welcomeTitle">
+  <form method="dialog">
+    <div class="dialog-head">
+      <h2 id="welcomeTitle">Property Investment Tax Model</h2>
+      <p class="help">A deterministic planning model for New York investment property. Everything runs in your browser; nothing is uploaded.</p>
+    </div>
+    <div class="dialog-body">
+      <div class="choice-list">
+        <button type="button" class="choice" id="wNew"><span class="t">New analysis</span><span class="d">Start from the New York City defaults</span></button>
+        <button type="button" class="choice" id="wExample"><span class="t">New York City example</span><span class="d">A $1.25M Upper East Side condo, held ten years</span></button>
+        <button type="button" class="choice" id="wContinue"><span class="t">Continue where you left off</span><span class="d" id="wContinueDesc">No saved session found</span></button>
+        <button type="button" class="choice" id="wLoad"><span class="t">Load a scenario</span><span class="d">Open a saved scenario or import a .json file</span></button>
+      </div>
+    </div>
+    <div class="dialog-foot">
+      <p class="help dialog-note">Planning software, not tax-preparation software. Not reviewed by a CPA.</p>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="scenarioDialog" aria-labelledby="scenarioTitle">
+  <div class="dialog-head">
+    <h2 id="scenarioTitle">Scenarios</h2>
+    <p class="help">Saved scenarios live in this browser only.</p>
+  </div>
+  <div class="dialog-body">
+    <div class="field">
+      <label for="f-scenarioName">Current scenario name</label>
+      <div class="control"><input type="text" id="f-scenarioName" maxlength="120" autocomplete="off"></div>
+    </div>
+    <div class="step-actions actions-start">
+      <button type="button" class="btn btn-primary btn-sm" id="sSave">Save</button>
+      <button type="button" class="btn btn-sm" id="sDuplicate">Duplicate</button>
+      <button type="button" class="btn btn-sm" id="sExport">Export .json</button>
+      <button type="button" class="btn btn-sm" id="sImport">Import .json</button>
+      <button type="button" class="btn btn-danger btn-sm" id="sReset">Reset to defaults</button>
+      <input type="file" id="importFile" accept="application/json,.json" class="visually-hidden" aria-label="Choose a scenario JSON file to import" tabindex="-1">
+    </div>
+    <h3 class="mt-lg">Saved scenarios</h3>
+    <ul class="scenario-list" id="scenarioList"></ul>
+    <p class="help" id="scenarioEmpty" hidden>Nothing saved yet.</p>
+  </div>
+  <div class="dialog-foot">
+    <button type="button" class="btn" id="scenarioClose">Close</button>
+  </div>
+</dialog>
+
+<noscript>
+  <div class="noscript-box">
+    <h1>JavaScript is required</h1>
+    <p>This calculator runs entirely in your browser and needs JavaScript enabled. No data is sent anywhere either way.</p>
+  </div>
+</noscript>
+
+<script type="module" src="./src/app.js"></script>
+</body>
+</html>
