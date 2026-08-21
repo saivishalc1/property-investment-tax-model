@@ -1,0 +1,33 @@
+# dependencies
+node_modules/
+
+# test output
+test-results/
+playwright-report/
+blob-report/
+.playwright/
+coverage/
+
+# build output
+dist/
+
+# editors and OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# secrets — never commit any of these
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+secrets.json
+.netrc
+
+# local scratch
+*.log
+tmp/
