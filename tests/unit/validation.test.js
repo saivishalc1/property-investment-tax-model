@@ -61,9 +61,33 @@ test('improvements placed in service after the sale are an error', () => {
 
 test('choosing an explicit sale price without entering one is an error', () => {
   const s = defaultState();
-  s.sale.useOverride = true;
+  s.sale.saleBasis = 'price';
   s.sale.overridePrice = 0;
   assert.ok(errPaths(s).includes('sale.overridePrice'));
+});
+
+test('choosing an exit cap basis without a cap rate is an error', () => {
+  const s = defaultState();
+  s.sale.saleBasis = 'exitCap';
+  s.sale.exitCapPct = 0;
+  assert.ok(errPaths(s).includes('sale.exitCapPct'));
+});
+
+test('valuing the exit off a cap rate warns about the assumption', () => {
+  const s = defaultState();
+  s.sale.saleBasis = 'exitCap';
+  const { errors, warnings } = validate(s);
+  assert.deepEqual(errors, []);
+  assert.ok(warnings.some((w) => /cap rate/i.test(w)));
+});
+
+test('rentable area and unit count are range-checked', () => {
+  const s = defaultState();
+  s.purchase.sqft = -5;
+  s.purchase.units = -1;
+  const paths = errPaths(s);
+  assert.ok(paths.includes('purchase.sqft'));
+  assert.ok(paths.includes('purchase.units'));
 });
 
 test('warnings flag modelled-but-caveated assumptions without blocking the run', () => {

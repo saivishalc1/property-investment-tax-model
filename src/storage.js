@@ -6,7 +6,7 @@
  * and none anywhere else in the application.
  */
 
-import { PRESETS } from './presets.js?v=9c3012ca52';
+import { PRESETS } from './presets.js?v=f9d715615c';
 
 export const SCHEMA_VERSION = 3;
 const NS = 'pitm';
@@ -47,6 +47,9 @@ export function defaultState() {
     purchase: {
       price: 950000,
       propType: 'residential',
+      address: '',
+      sqft: 1100,
+      units: 1,
       landPct: 20,
       downPct: 30,
       loanRate: 6.75,
@@ -79,8 +82,10 @@ export function defaultState() {
       passiveAllowed: false,
     },
     sale: {
+      saleBasis: 'appreciation',
       useOverride: false,
       overridePrice: 0,
+      exitCapPct: 5.5,
       saleMonth: 12,
       brokerPct: 5,
       sellLegal: 4000,

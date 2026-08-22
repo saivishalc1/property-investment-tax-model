@@ -20,6 +20,8 @@ const RULES = [
   // path,                  label,                          min,   max,     required
   ['purchase.price', 'Purchase price', 1, 1e12, true],
   ['purchase.landPct', 'Land share of value', 0, 100],
+  ['purchase.sqft', 'Rentable area', 0, 1e8],
+  ['purchase.units', 'Number of units', 0, 100000],
   ['purchase.downPct', 'Down payment', 0, 100],
   ['purchase.loanRate', 'Interest rate', 0, 30],
   ['purchase.loanTermYrs', 'Loan term', 1, 50],
@@ -50,6 +52,7 @@ const RULES = [
   ['sale.sellLegal', 'Legal and closing', 0, 1e9],
   ['sale.otherSell', 'Other selling costs', 0, 1e9],
   ['sale.saleMonth', 'Month of sale', 1, 12],
+  ['sale.exitCapPct', 'Exit cap rate', 0, 50],
   ['profile.otherMAGI', 'Other income (MAGI)', 0, 1e10],
   ['profile.serviceMonth', 'Month placed in service', 1, 12],
   ['profile.capexYear', 'Improvement year', 1, 50],
@@ -110,11 +113,18 @@ export function validate(state) {
       message: 'Improvements are placed in service after the property is sold. Lower the year or lengthen the hold.',
     });
   }
-  if (sa.useOverride && !(Number(sa.overridePrice) > 0)) {
+  if (sa.saleBasis === 'price' && !(Number(sa.overridePrice) > 0)) {
     errors.push({
       path: 'sale.overridePrice',
       label: 'Sale price',
-      message: 'Enter a sale price above zero, or switch back to a projected price.',
+      message: 'Enter a sale price above zero, or value the exit another way.',
+    });
+  }
+  if (sa.saleBasis === 'exitCap' && !(Number(sa.exitCapPct) > 0)) {
+    errors.push({
+      path: 'sale.exitCapPct',
+      label: 'Exit cap rate',
+      message: 'Enter an exit cap rate above zero, or value the exit another way.',
     });
   }
 
@@ -145,6 +155,13 @@ export function validate(state) {
   }
   if (Number(p.landPct) > 60) {
     warnings.push('A land share above 60% leaves very little depreciable basis. Confirm the allocation against your appraisal or tax bill.');
+  }
+  if (sa.saleBasis === 'exitCap' && Number(sa.exitCapPct) > 0 && Number(h.rentMo) > 0) {
+    // A tighter exit than entry assumes the market re-rates in your favour.
+    warnings.push('You are valuing the exit off a cap rate. If that cap is tighter than the going-in cap, the model is assuming the market improves — worth being able to defend.');
+  }
+  if (Number(p.units) > 1 && state.purchase.propType === 'coop') {
+    warnings.push('Co-op ownership is share-based, so a multi-unit co-op is unusual. Check the unit count.');
   }
   if (state.meta.preset && !String(state.meta.preset).startsWith('us-')) {
     warnings.push('This is an experimental preset. Rates are researched but unverified and several local rules cannot be expressed by this engine.');

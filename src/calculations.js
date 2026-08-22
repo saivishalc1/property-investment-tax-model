@@ -13,7 +13,7 @@
 import {
   FEDERAL_ORDINARY, FEDERAL_LTCG, NEW_YORK_STATE, NEW_YORK_CITY,
   SECTION_469_ALLOWANCE, TAX_YEAR,
-} from './taxTables.js?v=9c3012ca52';
+} from './taxTables.js?v=f9d715615c';
 
 /** Coerce anything to a finite number; non-numeric input becomes 0. */
 export function num(v) {
@@ -540,9 +540,25 @@ export function computeModel(S) {
   /* ============================ 3. SALE ============================ */
 
   const projectedPrice = price * Math.pow(1 + num(H.apprPct) / 100, years);
-  const salePrice = (SA.useOverride && num(SA.overridePrice) > 0)
-    ? num(SA.overridePrice)
-    : projectedPrice;
+
+  /* Three ways to put a number on the exit, which is how the industry actually
+     argues about it:
+       'appreciation'  grow today's price at an assumed rate
+       'price'         a specific figure you have in mind
+       'exitCap'       capitalise the final year's NOI at an exit cap rate —
+                       the standard underwriting basis, because it values the
+                       income rather than the calendar.
+     The final year's NOI is the numerator; a buyer purchasing at the end of
+     year N is buying year N's income. */
+  const finalNoi = table[years - 1].noi;
+  const exitCapPct = num(SA.exitCapPct);
+  const capBasedPrice = exitCapPct > 0 ? finalNoi / (exitCapPct / 100) : 0;
+
+  let salePrice;
+  let saleBasis = SA.saleBasis || (SA.useOverride ? 'price' : 'appreciation');
+  if (saleBasis === 'exitCap' && capBasedPrice > 0) salePrice = capBasedPrice;
+  else if (saleBasis === 'price' && num(SA.overridePrice) > 0) salePrice = num(SA.overridePrice);
+  else { salePrice = projectedPrice; saleBasis = 'appreciation'; }
 
   // Holding-period regimes: Japan's five-year line, Germany's ten-year
   // exemption, Singapore's seller's stamp duty. NY has neither, so both
@@ -626,7 +642,12 @@ export function computeModel(S) {
   const netProceeds = grossProceeds - totalSaleTax + releasedLossTaxBenefit + lossTaxBenefit;
 
   const sale = {
-    projectedPrice, salePrice, usedOverride: !!(SA.useOverride && num(SA.overridePrice) > 0),
+    projectedPrice, salePrice, saleBasis, capBasedPrice, finalNoi,
+    usedOverride: saleBasis === 'price',
+    // What cap rate the assumed exit price actually implies, whichever basis
+    // produced it. An exit priced at a sharply lower cap than the going-in
+    // figure is an assumption worth arguing about, so it is always shown.
+    exitCapRate: salePrice > 0 ? finalNoi / salePrice * 100 : 0,
     sellerPaysTransfer, sellStateTransfer, sellCityTransfer, broker, flipTax,
     sellLegal, sellOther, sellerDuty, sellerDutyRate, cgtRate,
     sellingCosts, amountRealized, adjustedBasis, costBasis, capexTotal, accumDep,
@@ -658,8 +679,26 @@ export function computeModel(S) {
   const totalProfit = cumAfterTaxCF + netProceeds - cashAtClosing;
   const year1 = table[0];
 
+  const sqft = Math.max(0, num(P.sqft));
+  const units = Math.max(0, Math.round(num(P.units)));
+
   const returns = {
     cashInvested: cashAtClosing,
+    pricePerSqft: sqft > 0 ? price / sqft : null,
+    pricePerUnit: units > 0 ? price / units : null,
+    salePricePerSqft: sqft > 0 ? salePrice / sqft : null,
+    salePricePerUnit: units > 0 ? salePrice / units : null,
+    rentPerSqftYr: sqft > 0 ? year1.grossRent / sqft : null,
+    exitCapRate: salePrice > 0 ? finalNoi / salePrice * 100 : 0,
+    // Average debt-service coverage over the hold, the figure a lender asks for.
+    avgDscr: (() => {
+      const yrs = table.filter((y) => y.debtService > 0);
+      return yrs.length ? yrs.reduce((a, y) => a + y.noi / y.debtService, 0) / yrs.length : null;
+    })(),
+    minDscr: (() => {
+      const yrs = table.filter((y) => y.debtService > 0).map((y) => y.noi / y.debtService);
+      return yrs.length ? Math.min(...yrs) : null;
+    })(),
     totalProfit,
     roi: cashAtClosing > 0 ? totalProfit / cashAtClosing * 100 : 0,
     annualisedRoi: cashAtClosing > 0 && years > 0
@@ -703,8 +742,23 @@ export function computeModel(S) {
     deferredRecapture: unrecaptured,
   };
 
+  /* Sources and uses: every dollar coming in and every dollar going out at
+     close, which must balance. Standard on any real estate closing summary. */
+  const uses = {
+    purchasePrice: price,
+    acquisitionCosts: basisCosts,
+    financingCosts,
+    total: price + basisCosts + financingCosts,
+  };
+  const sources = {
+    loanProceeds: loan,
+    equity: cashAtClosing,
+    total: loan + cashAtClosing,
+  };
+  const sourcesAndUses = { uses, sources, balanced: Math.abs(uses.total - sources.total) < 0.01 };
+
   return {
-    purchase, hold, sale, returns, exchange,
+    purchase, hold, sale, returns, exchange, sourcesAndUses,
     meta: { ordinaryRate, cgtRate, depLife, taxYear: TAX_YEAR, useBrackets },
   };
 }

@@ -8,10 +8,10 @@
  * static SVG strings built entirely from numbers.
  */
 
-import { computeModel, computeVariant, num } from './calculations.js?v=9c3012ca52';
-import { PRESETS, REGIONS } from './presets.js?v=9c3012ca52';
-import { validate } from './validation.js?v=9c3012ca52';
-import * as store from './storage.js?v=9c3012ca52';
+import { computeModel, computeVariant, num } from './calculations.js?v=f9d715615c';
+import { PRESETS, REGIONS } from './presets.js?v=f9d715615c';
+import { validate } from './validation.js?v=f9d715615c';
+import * as store from './storage.js?v=f9d715615c';
 
 /* ================================================================== *
  * DOM helpers
@@ -729,11 +729,28 @@ function bindDynamic(root) {
 
 function renderSaleStep() {
   const s = results.sale;
-  $('#overridePriceField').hidden = !S.sale.useOverride;
+  const basis = s.saleBasis;
+  $('#overridePriceField').hidden = basis !== 'price';
+  $('#exitCapField').hidden = basis !== 'exitCap';
   $('#flipTaxField').hidden = S.purchase.propType !== 'coop';
-  $('#projectedPriceNote').textContent = S.sale.useOverride
-    ? `For reference, ${pct(num(S.hold.apprPct))} a year for ${results.hold.years} years would give ${money(s.projectedPrice)}.`
-    : `Projected sale price after ${results.hold.years} years at ${pct(num(S.hold.apprPct))} a year: ${money(s.projectedPrice)}.`;
+
+  const parts = [`Sale price used: ${money(s.salePrice)}.`];
+  if (basis !== 'appreciation') {
+    parts.push(`Growing today's price at ${pct(num(S.hold.apprPct))} a year would give ${money(s.projectedPrice)}.`);
+  }
+  if (basis !== 'exitCap' && s.finalNoi > 0) {
+    parts.push(`That values the final year's net operating income of ${money(s.finalNoi)} at a ${pct(s.exitCapRate)} exit cap.`);
+  }
+  if (basis === 'exitCap') {
+    parts.push(`Final-year net operating income of ${money(s.finalNoi)} ÷ ${pct(num(S.sale.exitCapPct))}.`);
+  }
+  const spread = s.exitCapRate - results.returns.capRate;
+  if (Math.abs(spread) >= 0.25) {
+    parts.push(spread < 0
+      ? `That exit cap is ${pct(Math.abs(spread))} tighter than the ${pct(results.returns.capRate)} going-in cap, which assumes the market improves.`
+      : `That exit cap is ${pct(spread)} wider than the ${pct(results.returns.capRate)} going-in cap, which is the conservative direction.`);
+  }
+  $('#projectedPriceNote').textContent = parts.join(' ');
 }
 
 /* ---------- results ---------- */
@@ -750,7 +767,7 @@ function renderResultsStep() {
     { k: 'Cash to close', v: money(p.cashAtClosing), sub: `${pct(100 - p.ltv, 0)} down plus closing costs` },
     { k: 'After-tax cash flow', v: money(h.year1.afterTaxCF), sub: 'Year 1, after income tax', cls: signClass(h.year1.afterTaxCF) },
     { k: 'Total profit', v: money(rt.totalProfit), sub: `Over ${h.years} years, after all tax`, cls: signClass(rt.totalProfit) },
-    { k: 'After-tax IRR', v: rt.irr === null ? 'n/a' : pct(rt.irr * 100), sub: rt.preTaxIrr === null ? 'Annualised return' : `Pre-tax ${pct(rt.preTaxIrr * 100)}`, cls: rt.irr === null ? '' : signClass(rt.irr) },
+    { k: 'Levered IRR, after tax', v: rt.irr === null ? 'n/a' : pct(rt.irr * 100), sub: rt.preTaxIrr === null ? 'Annualised return' : `Before tax ${pct(rt.preTaxIrr * 100)}`, cls: rt.irr === null ? '' : signClass(rt.irr) },
   ];
   const hero = $('#kpiHero');
   clear(hero);
@@ -764,15 +781,23 @@ function renderResultsStep() {
 
   // ---- supporting figures ----
   const kpis = [
-    { k: 'Net operating income (year 1)', v: money(h.year1.noi), sub: 'Before mortgage and tax' },
-    { k: 'Cap rate', v: pct(rt.capRate), sub: 'Year 1 NOI ÷ purchase price' },
+    { k: 'Net operating income (NOI)', v: money(h.year1.noi), sub: 'Year 1, before mortgage and tax' },
+    { k: 'Going-in cap rate', v: pct(rt.capRate), sub: 'Year 1 NOI ÷ purchase price' },
     { k: 'Cash-on-cash return', v: pct(rt.cashOnCash), sub: 'Year 1 pre-tax cash flow ÷ cash invested', cls: signClass(rt.cashOnCash) },
     { k: 'Sale price', v: money(s.salePrice), sub: s.usedOverride ? 'You entered this figure' : `Projected at ${pct(num(S.hold.apprPct))} a year` },
     { k: 'Tax on the sale', v: money(s.totalSaleTax), sub: `Effective ${pct(s.effectiveGainRate)} of the gain` },
     { k: 'Net sale proceeds', v: money(s.netProceeds), sub: 'After loan payoff, costs and tax', cls: signClass(s.netProceeds) },
     { k: 'Return on investment', v: pct(rt.roi, 1), sub: `${pct(rt.annualisedRoi, 1)} a year compounded`, cls: signClass(rt.roi) },
     { k: 'Equity multiple', v: rt.equityMultiple.toFixed(2) + '×', sub: 'Total cash returned ÷ cash invested' },
-  ];
+    { k: 'Exit cap rate', v: pct(rt.exitCapRate), sub: `Final-year NOI ÷ sale price` },
+    rt.minDscr === null ? null : {
+      k: 'Debt service coverage', v: rt.minDscr.toFixed(2) + '×',
+      sub: rt.minDscr < 1 ? 'Lowest year — below 1.00, rent does not cover debt' : 'Lowest year of the hold',
+      cls: rt.minDscr < 1 ? 'neg' : '',
+    },
+    rt.pricePerSqft === null ? null : { k: 'Price per square foot', v: money(rt.pricePerSqft), sub: rt.rentPerSqftYr ? `Rent ${money(rt.rentPerSqftYr)} / sq ft a year` : 'At purchase' },
+    rt.pricePerUnit === null || num(S.purchase.units) <= 1 ? null : { k: 'Price per unit', v: money(rt.pricePerUnit), sub: 'At purchase' },
+  ].filter(Boolean);
   const grid = $('#kpiGrid');
   clear(grid);
   kpis.forEach((k) => {
@@ -812,6 +837,22 @@ function renderResultsStep() {
     `land          = cost basis × ${pct(num(S.purchase.landPct))} = ${money(p.landValue)}   (never depreciable)`,
     `depreciable   = ${money(p.costBasis)} − ${money(p.landValue)} = ${money(p.depreciableBasis)}`,
   ]);
+
+  // ---- sources and uses ----
+  const su = results.sourcesAndUses;
+  renderTable($('#sourcesUsesTable'), 'Sources and uses at closing', [
+    { kind: 'group', label: 'Uses' },
+    { label: 'Purchase price', value: money(su.uses.purchasePrice) },
+    { label: 'Acquisition costs (capitalised into basis)', value: money(su.uses.acquisitionCosts) },
+    { label: 'Financing costs', value: money(su.uses.financingCosts) },
+    { label: 'Total uses', value: money(su.uses.total), kind: 'total' },
+    { kind: 'group', label: 'Sources' },
+    { label: 'Loan proceeds', value: money(su.sources.loanProceeds) },
+    { label: 'Equity required', value: money(su.sources.equity) },
+    { label: 'Total sources', value: money(su.sources.total), kind: 'total' },
+    { label: su.balanced ? 'Balanced' : 'Out of balance — this is a bug, please report it',
+      value: money(su.sources.total - su.uses.total), kind: 'sub', cls: su.balanced ? '' : 'neg' },
+  ], null, true);
 
   // ---- operating ----
   const totalNoi = h.table.reduce((a, y) => a + y.noi, 0);
@@ -1161,6 +1202,8 @@ function renderReportStep() {
   };
 
   root.appendChild(el('h2', { text: S.meta.name || 'Property investment analysis' }));
+  const addr = String(S.purchase.address || '').trim();
+  if (addr) root.appendChild(el('p', { class: 'report-address', text: addr }));
   const meta = el('p', { class: 'report-meta' });
   meta.appendChild(document.createTextNode(
     `${preset.label} · ${propTypeLabel()} · Generated ${dateLong(new Date().toISOString())} · Tax year ${preset.taxYear} · Rates checked ${preset.verified} · Model schema v${store.SCHEMA_VERSION}`));
@@ -1186,6 +1229,10 @@ function renderReportStep() {
     kvTable('Property', [
       { label: 'Purchase price', value: money(p.price) },
       { label: 'Property type', value: propTypeLabel() },
+      rt.pricePerSqft === null ? null : { label: 'Price per square foot', value: money(rt.pricePerSqft) },
+      num(S.purchase.units) > 1 ? { label: 'Price per unit', value: money(rt.pricePerUnit) } : null,
+      { label: 'Going-in cap rate', value: pct(rt.capRate) },
+      { label: 'Exit cap rate', value: pct(rt.exitCapRate) },
       { label: 'Land share', value: pct(num(S.purchase.landPct), 0) },
       { label: 'Cost basis', value: money(p.costBasis) },
       { label: 'Depreciable basis', value: money(p.depreciableBasis) },
@@ -1305,21 +1352,60 @@ function renderReportStep() {
  * Live summary rail and dock
  * ================================================================== */
 
+/**
+ * The deal header. A broker, lender or appraiser reads a property in this order
+ * — what it is, what it costs per unit of area, what it yields, whether it
+ * covers its debt — so it sits above everything and never moves.
+ */
+function renderDealStrip() {
+  const { purchase: p, hold: h, returns: rt } = results;
+  $('#dealName').textContent = String(S.purchase.address || '').trim() || 'Untitled property';
+
+  const preset = PRESETS[S.meta.preset] || PRESETS['us-nyc'];
+  const bits = [preset.label, propTypeLabel()];
+  const units = Math.round(num(S.purchase.units));
+  if (units > 0) bits.push(`${units} unit${units === 1 ? '' : 's'}`);
+  const sqft = num(S.purchase.sqft);
+  if (sqft > 0) bits.push(`${Math.round(sqft).toLocaleString('en-US')} sq ft`);
+  $('#dealSub').textContent = bits.join(' · ');
+
+  const metrics = [
+    ['Price', money(p.price)],
+    rt.pricePerSqft ? ['Price / sq ft', money(rt.pricePerSqft)] : null,
+    rt.pricePerUnit && units > 1 ? ['Price / unit', money(rt.pricePerUnit)] : null,
+    ['Going-in cap', pct(rt.capRate)],
+    ['Exit cap', pct(rt.exitCapRate)],
+    ['LTV', pct(p.ltv, 0)],
+    rt.minDscr === null ? null : ['DSCR (min)', rt.minDscr.toFixed(2) + '×'],
+  ].filter(Boolean);
+
+  const host = $('#dealMetrics');
+  clear(host);
+  metrics.forEach(([k, v]) => {
+    host.appendChild(el('dt', { text: k }));
+    // A DSCR below 1.00 means the property does not cover its own debt service.
+    const low = k.startsWith('DSCR') && rt.minDscr !== null && rt.minDscr < 1;
+    host.appendChild(el('dd', { class: low ? 'neg' : '', text: v + (low ? ' — below 1.00' : '') }));
+  });
+}
+
 function renderSummary() {
   const { purchase: p, hold: h, sale: s, returns: rt } = results;
   const items = [
-    { k: 'Cash to close', v: money(p.cashAtClosing), headline: true },
+    { k: 'Equity to close', v: money(p.cashAtClosing), headline: true },
     { k: 'Year 1 NOI', v: money(h.year1.noi) },
-    { k: 'Cap rate', v: pct(rt.capRate) },
+    { k: 'Going-in cap', v: pct(rt.capRate) },
     { k: 'Cash-on-cash', v: pct(rt.cashOnCash), cls: signClass(rt.cashOnCash) },
     { k: 'After-tax cash flow (yr 1)', v: money(h.year1.afterTaxCF), cls: signClass(h.year1.afterTaxCF) },
-    { k: 'Sale price', v: money(s.salePrice) },
+    rt.minDscr === null ? null : { k: 'DSCR (min)', v: rt.minDscr.toFixed(2) + '×', cls: rt.minDscr < 1 ? 'neg' : '' },
+    { k: 'Exit price', v: money(s.salePrice) },
+    { k: 'Exit cap', v: pct(rt.exitCapRate) },
     { k: 'Tax on sale', v: money(s.totalSaleTax) },
     { k: 'Net proceeds', v: money(s.netProceeds) },
     { k: 'Total profit', v: money(rt.totalProfit), cls: signClass(rt.totalProfit) },
     { k: 'ROI', v: pct(rt.roi, 1), cls: signClass(rt.roi) },
-    { k: 'After-tax IRR', v: rt.irr === null ? 'n/a' : pct(rt.irr * 100), cls: rt.irr === null ? '' : signClass(rt.irr), headline: true },
-  ];
+    { k: 'Levered IRR, after tax', v: rt.irr === null ? 'n/a' : pct(rt.irr * 100), cls: rt.irr === null ? '' : signClass(rt.irr), headline: true },
+  ].filter(Boolean);
 
   [['#railList', true], ['#dockList', false]].forEach(([sel]) => {
     const list = $(sel);
@@ -1387,6 +1473,7 @@ function renderAll() {
   syncInputs();
   applyModeVisibility();
   renderSummary();
+  renderDealStrip();
   renderPropertyStep();
   renderFinancingStep();
   renderOperationsStep();

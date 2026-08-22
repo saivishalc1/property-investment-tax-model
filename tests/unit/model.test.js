@@ -354,12 +354,80 @@ test('who pays the transfer tax on the sale changes the seller\'s costs', () => 
 
 test('an explicit sale price overrides the appreciation projection', () => {
   const s = defaultState();
-  s.sale.useOverride = true;
+  s.sale.saleBasis = 'price';
   s.sale.overridePrice = 2000000;
   const r = computeModel(s);
   assert.equal(r.sale.salePrice, 2000000);
   assert.ok(r.sale.usedOverride);
   assert.notEqual(r.sale.projectedPrice, 2000000);
+});
+
+test('the exit can be underwritten off a cap rate, as the industry prices it', () => {
+  const s = defaultState();
+  s.sale.saleBasis = 'exitCap';
+  s.sale.exitCapPct = 5;
+  const r = computeModel(s);
+  // Price = final-year NOI capitalised at the exit cap.
+  close(r.sale.salePrice, r.sale.finalNoi / 0.05, 0.01);
+  close(r.sale.exitCapRate, 5, 1e-6);
+  // A tighter cap must produce a higher price.
+  const tight = structuredClone(s);
+  tight.sale.exitCapPct = 4;
+  assert.ok(computeModel(tight).sale.salePrice > r.sale.salePrice);
+});
+
+test('a zero or missing exit cap falls back to the appreciation basis', () => {
+  const s = defaultState();
+  s.sale.saleBasis = 'exitCap';
+  s.sale.exitCapPct = 0;
+  const r = computeModel(s);
+  assert.equal(r.sale.saleBasis, 'appreciation');
+  close(r.sale.salePrice, r.sale.projectedPrice, 0.01);
+});
+
+test('the implied exit cap rate is always reported, whatever the basis', () => {
+  const r = computeModel(defaultState());
+  close(r.sale.exitCapRate, r.sale.finalNoi / r.sale.salePrice * 100, 1e-9);
+  close(r.returns.exitCapRate, r.sale.exitCapRate, 1e-9);
+});
+
+test('sources and uses balance to the cent', () => {
+  for (const down of [0, 25, 30, 100]) {
+    const s = defaultState();
+    s.purchase.downPct = down;
+    const r = computeModel(s);
+    assert.ok(r.sourcesAndUses.balanced, `sources and uses must balance at ${down}% down`);
+    close(r.sourcesAndUses.sources.total, r.sourcesAndUses.uses.total, 0.01);
+    close(r.sourcesAndUses.sources.equity, r.purchase.cashAtClosing, 0.01);
+  }
+});
+
+test('per-square-foot and per-unit metrics appear only when the inputs exist', () => {
+  const s = defaultState();
+  s.purchase.sqft = 1000;
+  s.purchase.units = 4;
+  const r = computeModel(s);
+  close(r.returns.pricePerSqft, s.purchase.price / 1000, 0.01);
+  close(r.returns.pricePerUnit, s.purchase.price / 4, 0.01);
+
+  const bare = defaultState();
+  bare.purchase.sqft = 0;
+  bare.purchase.units = 0;
+  const rb = computeModel(bare);
+  assert.equal(rb.returns.pricePerSqft, null);
+  assert.equal(rb.returns.pricePerUnit, null);
+});
+
+test('debt service coverage is reported, and is null on an all-cash deal', () => {
+  const r = computeModel(defaultState());
+  close(r.returns.minDscr, Math.min(...r.hold.table.map((y) => y.noi / y.debtService)), 1e-9);
+  assert.ok(r.returns.avgDscr >= r.returns.minDscr);
+
+  const cash = defaultState();
+  cash.purchase.downPct = 100;
+  const rc = computeModel(cash);
+  assert.equal(rc.returns.minDscr, null);
+  assert.equal(rc.returns.avgDscr, null);
 });
 
 /* ---------------- returns ---------------- */

@@ -36,29 +36,29 @@
 :root {
   color-scheme: light;
 
-  --bg: #f5f7f9;
+  --bg: #f6f5f2;
   --surface: #ffffff;
-  --surface-2: #eef1f5;
-  --surface-3: #e2e7ed;
-  --line: #d8dee6;
-  --line-strong: #b4bdc9;
+  --surface-2: #f0eee9;
+  --surface-3: #e5e2db;
+  --line: #ded9d0;
+  --line-strong: #bdb6a9;
 
-  --text: #10151c;
-  --text-2: #48525f;
-  --text-3: #5b6573;   /* WCAG AA against every light surface incl. --surface-3 */
+  --text: #1a1712;
+  --text-2: #55504a;
+  --text-3: #645f56;   /* WCAG AA against every light surface incl. --surface-3 */
 
   --accent: #1d3f72;
   --accent-hover: #16325c;
-  --accent-soft: #e7edf6;
-  --accent-line: #b3c4dc;
+  --accent-soft: #e9edf4;
+  --accent-line: #b6c3d8;
   --on-accent: #ffffff;
 
   --pos: #12694a;
-  --pos-soft: #e2f1ea;
+  --pos-soft: #e4efe7;
   --neg: #a3271f;
-  --neg-soft: #fae9e7;
+  --neg-soft: #f8e9e5;
   --warn: #8a5b12;
-  --warn-soft: #fbf0dd;
+  --warn-soft: #f8efdb;
 
   --focus: #1d3f72;
 
@@ -91,29 +91,29 @@
 :root[data-theme="dark"] {
   color-scheme: dark;
 
-  --bg: #0e1216;
-  --surface: #161b21;
-  --surface-2: #1e242c;
-  --surface-3: #283039;
-  --line: #2f3843;
-  --line-strong: #45505d;
+  --bg: #14120f;
+  --surface: #1c1a16;
+  --surface-2: #24211c;
+  --surface-3: #2f2b25;
+  --line: #38342d;
+  --line-strong: #4f4a41;
 
-  --text: #eef1f5;
-  --text-2: #b3bcc7;
-  --text-3: #97a2ae;   /* WCAG AA against every dark surface incl. --surface-3 */
+  --text: #f3f0ea;
+  --text-2: #bfb8ad;
+  --text-3: #a8a091;   /* WCAG AA against every dark surface incl. --surface-3 */
 
-  --accent: #86aee8;
-  --accent-hover: #9dbef0;
-  --accent-soft: #16233a;
-  --accent-line: #2c4670;
+  --accent: #8fb0e8;
+  --accent-hover: #a6c1f0;
+  --accent-soft: #182338;
+  --accent-line: #2f4670;
   --on-accent: #0b111a;
 
   --pos: #4cc48e;
-  --pos-soft: #10281e;
+  --pos-soft: #12271d;
   --neg: #ef8a80;
-  --neg-soft: #2c1614;
+  --neg-soft: #2b1714;
   --warn: #dcb063;
-  --warn-soft: #2a2112;
+  --warn-soft: #2a2113;
 
   --focus: #a8c6f2;
 
@@ -128,29 +128,29 @@
   :root:not([data-theme="light"]) {
     color-scheme: dark;
 
-    --bg: #0e1216;
-    --surface: #161b21;
-    --surface-2: #1e242c;
-    --surface-3: #283039;
-    --line: #2f3843;
-    --line-strong: #45505d;
+    --bg: #14120f;
+    --surface: #1c1a16;
+    --surface-2: #24211c;
+    --surface-3: #2f2b25;
+    --line: #38342d;
+    --line-strong: #4f4a41;
 
-    --text: #eef1f5;
-    --text-2: #b3bcc7;
-    --text-3: #97a2ae;   /* WCAG AA against every dark surface incl. --surface-3 */
+    --text: #f3f0ea;
+    --text-2: #bfb8ad;
+    --text-3: #a8a091;   /* WCAG AA against every dark surface incl. --surface-3 */
 
-    --accent: #86aee8;
-    --accent-hover: #9dbef0;
-    --accent-soft: #16233a;
-    --accent-line: #2c4670;
+    --accent: #8fb0e8;
+    --accent-hover: #a6c1f0;
+    --accent-soft: #182338;
+    --accent-line: #2f4670;
     --on-accent: #0b111a;
 
     --pos: #4cc48e;
-    --pos-soft: #10281e;
+    --pos-soft: #12271d;
     --neg: #ef8a80;
-    --neg-soft: #2c1614;
+    --neg-soft: #2b1714;
     --warn: #dcb063;
-    --warn-soft: #2a2112;
+    --warn-soft: #2a2113;
 
     --focus: #a8c6f2;
 
@@ -865,3 +865,54 @@ dialog::backdrop { background: rgba(10, 12, 16, .55); }
   text-decoration: underline; text-underline-offset: 2px; cursor: pointer;
 }
 .linklike:hover { color: var(--accent-hover); }
+
+
+/* ---------- deal header ----------
+   A broker, lender or appraiser reads a property in a fixed order: what it is,
+   what it costs per unit of area, what it yields, whether it covers its debt.
+   This strip states that, above everything, and never moves. The hairline rule
+   below it is the only architectural flourish in the design. */
+.deal-strip {
+  position: sticky; top: 65px; z-index: 40;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--line);
+  box-shadow: inset 0 -3px 0 -2px var(--accent-line);
+}
+.deal-inner {
+  max-width: 1500px; margin: 0 auto;
+  padding: var(--sp3) var(--sp4);
+  display: flex; align-items: baseline; gap: var(--sp5); flex-wrap: wrap;
+}
+.deal-id { display: grid; gap: 1px; min-width: 0; flex: 1 1 240px; }
+.deal-name {
+  font-family: var(--serif); font-size: var(--step1); font-weight: 600;
+  letter-spacing: -.01em; color: var(--text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.deal-sub { font-size: var(--step-1); color: var(--text-2); }
+
+.deal-metrics {
+  display: flex; flex-wrap: wrap; gap: var(--sp2) var(--sp5);
+  margin: 0; align-items: baseline;
+}
+.deal-metrics dt {
+  font-size: 11px; text-transform: uppercase; letter-spacing: .07em;
+  color: var(--text-3); font-weight: 600;
+}
+.deal-metrics dd {
+  margin: 0 0 0 7px; font-weight: 650;
+  font-variant-numeric: tabular-nums lining-nums; color: var(--text);
+}
+.deal-metrics dd.neg { color: var(--neg); }
+/* Each label and its value travel together when the row wraps. */
+.deal-metrics dt { display: inline-flex; }
+.deal-metrics dd { display: inline-flex; margin-right: 0; }
+
+@media (max-width: 860px) {
+  .deal-strip { position: static; }
+  .deal-metrics { gap: var(--sp1) var(--sp4); }
+}
+.report-address {
+  font-family: var(--serif); font-size: var(--step1);
+  color: var(--text-2); margin: 0 0 var(--sp1);
+}

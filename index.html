@@ -23,7 +23,7 @@
 <link rel="icon" href="./assets/favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="./assets/icon-180.png">
 <link rel="manifest" href="./assets/site.webmanifest">
-<link rel="stylesheet" href="./src/styles.css?v=9c3012ca52">
+<link rel="stylesheet" href="./src/styles.css?v=f9d715615c">
 </head>
 <body>
 
@@ -48,6 +48,16 @@
     </div>
   </div>
 </header>
+
+<section class="deal-strip no-print" id="dealStrip" aria-label="Deal summary">
+  <div class="deal-inner">
+    <div class="deal-id">
+      <span class="deal-name" id="dealName">Untitled property</span>
+      <span class="deal-sub" id="dealSub"></span>
+    </div>
+    <dl class="deal-metrics" id="dealMetrics"></dl>
+  </div>
+</section>
 
 <div class="shell">
 
@@ -107,6 +117,33 @@
           </div>
           <p class="help" id="propTypeHelp">Co-op shares are personal property: no title insurance and no mortgage recording tax, but a flip tax on sale. Commercial property depreciates over 39 years instead of 27.5.</p>
         </fieldset>
+
+        <div class="field">
+          <label for="f-address">Property address or name</label>
+          <div class="control"><input type="text" id="f-address" data-bind="purchase.address" maxlength="120" autocomplete="off" placeholder="e.g. 412 Bergen Street, Brooklyn"></div>
+          <p class="help">Optional. Used to label the deal header and the report.</p>
+        </div>
+
+        <div class="card-grid">
+          <div class="field">
+            <label for="f-sqft">Rentable area</label>
+            <div class="control">
+              <input type="number" id="f-sqft" data-bind="purchase.sqft" step="50" min="0" inputmode="decimal" aria-describedby="f-sqft-help f-sqft-err">
+              <span class="affix suffix">sq ft</span>
+            </div>
+            <p class="help" id="f-sqft-help">Drives price and rent per square foot.</p>
+            <p class="field-error" id="f-sqft-err"></p>
+          </div>
+          <div class="field">
+            <label for="f-units">Number of units</label>
+            <div class="control">
+              <input type="number" id="f-units" data-bind="purchase.units" step="1" min="0" inputmode="numeric" aria-describedby="f-units-help f-units-err">
+              <span class="affix suffix">units</span>
+            </div>
+            <p class="help" id="f-units-help">1 for a single condo, co-op or house.</p>
+            <p class="field-error" id="f-units-err"></p>
+          </div>
+        </div>
 
         <div class="field">
           <label for="f-price">Purchase price</label>
@@ -663,14 +700,24 @@
 
       <div class="card">
         <h3>Sale price</h3>
-        <div class="field">
-          <div class="switch-row">
-            <span class="switch-text">
-              <label for="f-useOverride">Use a specific sale price</label>
-              <span class="help">Otherwise the sale price is projected from the appreciation rate you set in step 3.</span>
-            </span>
-            <input type="checkbox" class="switch" id="f-useOverride" data-bind="sale.useOverride">
+        <fieldset>
+          <legend>How should the exit be valued?</legend>
+          <div class="radio-row">
+            <label><input type="radio" name="saleBasis" value="appreciation" data-bind-radio="sale.saleBasis"> Grow today's price at the appreciation rate</label>
+            <label><input type="radio" name="saleBasis" value="exitCap" data-bind-radio="sale.saleBasis"> Capitalise the final year's NOI at an exit cap rate</label>
+            <label><input type="radio" name="saleBasis" value="price" data-bind-radio="sale.saleBasis"> A specific price</label>
           </div>
+          <p class="help">Capitalising the income is how the market actually prices a rental asset: a buyer is purchasing the final year's net operating income at whatever cap rate the market is trading at. Growing today's price at an assumed rate values the calendar instead.</p>
+        </fieldset>
+
+        <div class="field" id="exitCapField" hidden>
+          <label for="f-exitCapPct">Exit cap rate</label>
+          <div class="control">
+            <input type="number" id="f-exitCapPct" data-bind="sale.exitCapPct" step="0.05" min="0" inputmode="decimal" aria-describedby="f-exitCapPct-help f-exitCapPct-err">
+            <span class="affix suffix">%</span>
+          </div>
+          <p class="help" id="f-exitCapPct-help">Underwriters usually assume the exit cap is at or slightly above the going-in cap. Exiting at a sharply lower cap assumes the market improves, and is worth defending.</p>
+          <p class="field-error" id="f-exitCapPct-err"></p>
         </div>
         <div class="field" id="overridePriceField">
           <label for="f-overridePrice">Sale price</label>
@@ -773,6 +820,12 @@
         <h3>Cash required to close</h3>
         <div class="table-scroll" tabindex="0"><table id="cashTable"></table></div>
         <details class="how"><summary>How calculated</summary><div class="formula" id="cashFormula"></div></details>
+      </div>
+
+      <div class="card">
+        <h3>Sources and uses</h3>
+        <p class="card-hint">Every dollar going out at closing, and where it comes from. The two sides must balance.</p>
+        <div class="table-scroll" tabindex="0"><table id="sourcesUsesTable"></table></div>
       </div>
 
       <div class="section-head"><h2>While you hold it</h2></div>
@@ -921,8 +974,8 @@
 <!-- ================= mobile dock ================= -->
 <details class="results-dock no-print" id="resultsDock">
   <summary>
-    <span class="dock-item"><span class="k">Cash to close</span><span class="v" id="dockCash">—</span></span>
-    <span class="dock-item"><span class="k">After-tax IRR</span><span class="v" id="dockIrr">—</span></span>
+    <span class="dock-item"><span class="k">Equity to close</span><span class="v" id="dockCash">—</span></span>
+    <span class="dock-item"><span class="k">Levered IRR (AT)</span><span class="v" id="dockIrr">—</span></span>
     <span class="dock-toggle" aria-hidden="true">Details</span>
   </summary>
   <div class="dock-body">
@@ -958,6 +1011,6 @@
   </div>
 </noscript>
 
-<script type="module" src="./src/app.js?v=9c3012ca52"></script>
+<script type="module" src="./src/app.js?v=f9d715615c"></script>
 </body>
 </html>

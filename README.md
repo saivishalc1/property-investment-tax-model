@@ -112,9 +112,21 @@ desktops with no horizontal page overflow; a persistent results rail on desktop
 and a compact results dock on mobile keep the headline numbers visible while
 you edit.
 
+**Reads as real estate, not as a tax form.** A deal header sits above every
+step with what a broker, lender or appraiser looks at first: the address, asset
+type, unit count and area, then price, price per square foot and per unit,
+going-in cap, exit cap, LTV and the minimum debt service coverage over the hold
+— flagged when it falls below 1.00, because that is the point at which the rent
+stops covering the debt. Results are titled the way the industry titles them:
+net operating income, going-in and exit cap rates, sources and uses, levered
+IRR. The exit can be underwritten off a **cap rate** — capitalising the final
+year's NOI, which is how the market actually prices a rental asset — as well as
+by growing today's price or naming a figure, and the implied exit cap is always
+shown so a tightening assumption cannot hide.
+
 **Design.** One accent — a deep navy ink, chosen to read as institutional
-rather than as interface blue — over cool paper neutrals biased slightly toward
-it. Semantic gain/loss/caution colours are deliberately unrelated to the accent,
+rather than as interface blue — over warm limestone neutrals, the material the
+business actually sells. Semantic gain/loss/caution colours are deliberately unrelated to the accent,
 so "this is a link" and "this number is negative" can never be confused.
 Headings are set in Source Serif 4 because this is a tax document more than it
 is an app; every control, label and figure is IBM Plex Sans, whose numerals line

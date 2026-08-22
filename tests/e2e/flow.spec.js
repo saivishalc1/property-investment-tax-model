@@ -62,8 +62,9 @@ test.describe('core flow', () => {
     await page.locator('#f-price').fill('1500000');
     await expect.poll(async () => (await results(page)).cashAtClosing)
       .toBeGreaterThan(before.cashAtClosing);
-    // The rail reflects it too.
-    await expect(page.locator('#railList')).toContainText('Cash to close');
+    // The rail reflects it too, in the industry's own vocabulary.
+    await expect(page.locator('#railList')).toContainText('Equity to close');
+    await expect(page.locator('#railList')).toContainText('Going-in cap');
   });
 
   test('the mansion-tax cliff is visible in the interface', async ({ page }) => {
