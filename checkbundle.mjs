@@ -1,0 +1,22 @@
+import { chromium } from '@playwright/test';
+const b = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_PATH });
+const p = await (await b.newContext()).newPage();
+const errs = [];
+p.on('console', m => { if (m.type()==='error') errs.push(m.text()); });
+p.on('pageerror', e => errs.push('pageerror: '+e.message));
+await p.goto('http://127.0.0.1:4173/artifact.html');
+await p.waitForTimeout(1500);
+await p.locator('#wNew').click();
+await p.waitForTimeout(800);
+const r = await p.evaluate(() => {
+  const x = globalThis.__pitm && globalThis.__pitm.getResults();
+  return x ? {cash:Math.round(x.purchase.cashAtClosing), roi:+x.returns.roi.toFixed(1), irr:+(x.returns.irr*100).toFixed(2), tax:Math.round(x.sale.totalSaleTax)} : null;
+});
+console.log('results:', JSON.stringify(r));
+await p.getByRole('button', { name: '7 Comparisons' }).click();
+await p.waitForTimeout(600);
+await p.getByRole('button', { name: '8 Report' }).click();
+await p.waitForTimeout(600);
+console.log('report ok:', await p.locator('#reportRoot').isVisible());
+console.log('errors:', JSON.stringify(errs));
+await b.close();
