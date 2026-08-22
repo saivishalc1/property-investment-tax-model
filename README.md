@@ -58,7 +58,7 @@ a current browser — Chrome, Edge, Firefox or Safari from 2023 onward, for
 | --- | --- |
 | `npm run serve` | Serves the site at `http://localhost:4173`. |
 | `npm run serve:subpath` | Serves it at `http://localhost:4174/property-investment-tax-model/`, reproducing the GitHub Pages project subpath. |
-| `npm run build` | Produces `dist/` and fails the build on a broken reference, a root-absolute path, a possible secret or any network call in the shipped code. |
+| `npm run build` | Stamps a content hash onto every asset reference, then produces `dist/` and fails the build on a broken reference, a root-absolute path, a possible secret or any network call in the shipped code. |
 | `npm run bundle` | Produces `artifact.html`, a single self-contained file with the modules concatenated and the typefaces embedded, for hosts that want one file rather than ES modules. |
 | `npm test` | Unit tests for the calculation engine, validation and storage (Node's built-in test runner — no test framework dependency). |
 | `npm run test:e2e` | Playwright: user flow, scenario persistence, accessibility (axe-core), responsive layout and deployment shape. |
@@ -366,6 +366,7 @@ assets/                 favicon, icons, web manifest
   fonts/                self-hosted variable typefaces and their licences
 tools/
   build.js              dist/ build plus reference, secret and subpath checks
+  version.js            stamps ?v=<content hash> so no browser serves stale code
   bundle.js             single-file build (modules inlined, fonts embedded)
   serve.js              static server, optionally under a base path
 tests/
@@ -447,6 +448,14 @@ gh api -X POST repos/<owner>/property-investment-tax-model/pages \
 
 Then, in the repository, set **Settings → Pages → Source** to **GitHub
 Actions**, and push to `main`.
+
+Asset references carry a content hash (`./src/app.js?v=72f6b765…`), regenerated
+by `tools/version.js` whenever anything in `src/` changes and applied to the
+stylesheet, the module entry point and every import between modules. GitHub
+Pages caches files for its own lifetime, so without this a returning visitor can
+run yesterday's JavaScript against today's HTML — invisible to whoever deployed,
+and confusing to whoever is looking at it. A hard refresh is no longer needed
+after a deploy.
 
 Every path in the application is relative (`./src/app.js`, `./assets/...`), so
 the site works both at a user-site root and under a project subpath such as

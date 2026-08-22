@@ -10,7 +10,7 @@
     "test:e2e": "playwright test",
     "serve": "node tools/serve.js 4173",
     "serve:subpath": "node tools/serve.js 4174 /property-investment-tax-model",
-    "build": "node tools/build.js",
+    "build": "node tools/version.js && node tools/build.js",
     "bundle": "node tools/bundle.js",
     "check": "npm run build && npm test"
   },

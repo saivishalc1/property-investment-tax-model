@@ -8,10 +8,10 @@
  * static SVG strings built entirely from numbers.
  */
 
-import { computeModel, computeVariant, num } from './calculations.js';
-import { PRESETS, REGIONS } from './presets.js';
-import { validate } from './validation.js';
-import * as store from './storage.js';
+import { computeModel, computeVariant, num } from './calculations.js?v=72f6b7654f';
+import { PRESETS, REGIONS } from './presets.js?v=72f6b7654f';
+import { validate } from './validation.js?v=72f6b7654f';
+import * as store from './storage.js?v=72f6b7654f';
 
 /* ================================================================== *
  * DOM helpers
