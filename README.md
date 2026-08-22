@@ -96,9 +96,15 @@ generation date and tax year, all assumptions, operating results, the sale and
 tax breakdown, final returns, comparisons, sources, limitations and the
 disclaimer. Navigation and editing controls are excluded from print.
 
-**Scenarios.** Save, load, rename, duplicate, delete, reset, export to JSON and
-import from JSON. A versioned autosave restores your last session, and older
-files are migrated forward rather than rejected.
+**Nothing is lost, nothing to manage.** A versioned autosave restores your last
+session from the welcome screen, and older saved files are migrated forward
+rather than rejected. There is deliberately no scenario manager: saving, naming,
+duplicating and importing named scenarios was the most confusing part of the
+tool for someone running a single property, and this is a calculator rather than
+a document manager. The only scenario action in the interface is **Start over**.
+`storage.js` still exposes the full save/load/duplicate/delete API, and it is
+still tested, so the feature can be reinstated behind a control if a future
+audience needs it.
 
 **Themes and layout.** Light and dark, with the choice remembered, and the
 system preference honoured on first load. Layouts hold from 320px to large

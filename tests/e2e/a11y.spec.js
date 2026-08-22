@@ -38,12 +38,10 @@ test.describe('accessibility', () => {
     expect(r.violations.map((v) => v.id)).toEqual([]);
   });
 
-  test('the scenario dialog is accessible and traps focus', async ({ page }) => {
-    await openApp(page);
-    await page.getByRole('button', { name: 'Scenarios' }).click();
-    const r = await scan(page);
-    expect(r.violations.map((v) => v.id)).toEqual([]);
-    // A native <dialog> opened with showModal makes the rest inert.
+  test('the welcome dialog traps focus and closes on Escape', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.locator('#welcomeDialog')).toBeVisible();
+    // A native <dialog> opened with showModal makes the rest of the page inert.
     const inert = await page.evaluate(() => {
       const outside = document.querySelector('#f-price');
       outside.focus();
@@ -51,7 +49,7 @@ test.describe('accessibility', () => {
     });
     expect(inert).toBe(true);
     await page.keyboard.press('Escape');
-    await expect(page.locator('#scenarioDialog')).toBeHidden();
+    await expect(page.locator('#welcomeDialog')).toBeHidden();
   });
 
   test('landmarks and heading structure are present exactly once', async ({ page }) => {

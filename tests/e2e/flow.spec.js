@@ -8,7 +8,6 @@ test.describe('core flow', () => {
     await expect(dialog).toBeVisible();
     await expect(page.locator('#wNew')).toBeEnabled();
     await expect(page.locator('#wExample')).toBeEnabled();
-    await expect(page.locator('#wLoad')).toBeEnabled();
     // Nothing saved yet in a fresh context, so "continue" is disabled.
     await expect(page.locator('#wContinue')).toBeDisabled();
   });
@@ -18,7 +17,7 @@ test.describe('core flow', () => {
     await page.goto('/');
     await page.locator('#wExample').click();
     await expect(page.locator('#panel-results')).toBeVisible();
-    await expect(page.locator('#brandScenario')).toContainText('NYC example');
+    await expect(page.locator('#brandScenario')).toContainText('New York City');
     const r = await results(page);
     expect(r.cashAtClosing).toBeGreaterThan(0);
     expect(r.salePrice).toBeGreaterThan(1250000);

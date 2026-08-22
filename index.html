@@ -33,7 +33,7 @@
   <div class="header-inner">
     <div class="brand">
       <span class="brand-mark">Property Investment Tax Model</span>
-      <span class="brand-sub" id="brandScenario">Untitled scenario</span>
+      <span class="brand-sub" id="brandScenario">New York City</span>
     </div>
     <div class="header-spacer"></div>
     <div class="header-tools">
@@ -41,7 +41,7 @@
         <button type="button" id="modeQuick" aria-pressed="true">Quick estimate</button>
         <button type="button" id="modePro" aria-pressed="false">Professional</button>
       </div>
-      <button type="button" class="btn btn-sm" id="scenarioBtn" aria-haspopup="dialog">Scenarios</button>
+      <button type="button" class="btn btn-sm" id="resetBtn">Start over</button>
       <button type="button" class="btn btn-sm" id="themeBtn" aria-pressed="false">
         <span aria-hidden="true">◐</span><span class="visually-hidden">Toggle dark theme</span>
       </button>
@@ -604,6 +604,11 @@
         </div>
       </div>
 
+      <div class="callout info" data-mode="quick">
+        <h4>Using the standard New York rates</h4>
+        <p>Quick estimate applies the published federal, New York State and New York City rates for tax year 2026. To type in your own rates instead, switch to <strong>Professional</strong> at the top of the page.</p>
+      </div>
+
       <div class="card" data-mode="pro" hidden>
         <h3>Tax rates used</h3>
         <p class="card-hint">Every rate below is editable. Changing one changes the model immediately and nothing is silently overwritten.</p>
@@ -861,6 +866,11 @@
         <span class="eyebrow">Step 8 of 8</span>
         <h1 id="h-report">Report</h1>
         <p>A print-ready US Letter summary. Navigation, buttons and form controls are excluded from the printed page.</p>
+        <div class="field field-narrow">
+          <label for="f-reportTitle">Title for this report</label>
+          <div class="control"><input type="text" id="f-reportTitle" data-bind="meta.name" maxlength="120" autocomplete="off"></div>
+          <p class="help">Appears at the top of the printed page.</p>
+        </div>
         <div class="step-actions">
           <button type="button" class="btn" data-goto="compare">Back</button>
           <button type="button" class="btn btn-primary" id="printBtn">Print or save as PDF</button>
@@ -908,7 +918,6 @@
         <button type="button" class="choice" id="wNew"><span class="t">New analysis</span><span class="d">Start from the New York City defaults</span></button>
         <button type="button" class="choice" id="wExample"><span class="t">New York City example</span><span class="d">A $1.25M Upper East Side condo, held ten years</span></button>
         <button type="button" class="choice" id="wContinue"><span class="t">Continue where you left off</span><span class="d" id="wContinueDesc">No saved session found</span></button>
-        <button type="button" class="choice" id="wLoad"><span class="t">Load a scenario</span><span class="d">Open a saved scenario or import a .json file</span></button>
       </div>
     </div>
     <div class="dialog-foot">
@@ -917,32 +926,6 @@
   </form>
 </dialog>
 
-<dialog id="scenarioDialog" aria-labelledby="scenarioTitle">
-  <div class="dialog-head">
-    <h2 id="scenarioTitle">Scenarios</h2>
-    <p class="help">Saved scenarios live in this browser only.</p>
-  </div>
-  <div class="dialog-body">
-    <div class="field">
-      <label for="f-scenarioName">Current scenario name</label>
-      <div class="control"><input type="text" id="f-scenarioName" maxlength="120" autocomplete="off"></div>
-    </div>
-    <div class="step-actions actions-start">
-      <button type="button" class="btn btn-primary btn-sm" id="sSave">Save</button>
-      <button type="button" class="btn btn-sm" id="sDuplicate">Duplicate</button>
-      <button type="button" class="btn btn-sm" id="sExport">Export .json</button>
-      <button type="button" class="btn btn-sm" id="sImport">Import .json</button>
-      <button type="button" class="btn btn-danger btn-sm" id="sReset">Reset to defaults</button>
-      <input type="file" id="importFile" accept="application/json,.json" class="visually-hidden" aria-label="Choose a scenario JSON file to import" tabindex="-1">
-    </div>
-    <h3 class="mt-lg">Saved scenarios</h3>
-    <ul class="scenario-list" id="scenarioList"></ul>
-    <p class="help" id="scenarioEmpty" hidden>Nothing saved yet.</p>
-  </div>
-  <div class="dialog-foot">
-    <button type="button" class="btn" id="scenarioClose">Close</button>
-  </div>
-</dialog>
 
 <noscript>
   <div class="noscript-box">

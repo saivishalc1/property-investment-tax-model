@@ -173,6 +173,8 @@ function buildPresetSelect() {
 function applyPreset(key) {
   const preset = PRESETS[key];
   if (!preset) return;
+  rateFieldsBuiltFor = null;
+  bracketEditorsBuiltFor = null;
   S.rates = structuredClone(preset.rates);
   S.meta.preset = key;
   // Follow the local convention for who pays transfer tax, but never touch any
@@ -504,12 +506,27 @@ function renderOperationsStep() {
   ]);
 }
 
+// Rebuilding an input while someone is typing into it destroys the element and
+// takes the caret with it, so only the first character of a number ever lands.
+// These two containers are therefore built once per preset and afterwards only
+// have their values synced — never re-created on a keystroke.
+let rateFieldsBuiltFor = null;
+let bracketEditorsBuiltFor = null;
+
 function renderProfileStep() {
   const preset = PRESETS[S.meta.preset] || PRESETS['us-nyc'];
   const labels = preset.labels || {};
 
   // --- editable rate fields ---
   const host = $('#rateFields');
+  if (rateFieldsBuiltFor === S.meta.preset) {
+    syncDynamic(host);
+    renderBracketEditors(labels);
+    renderSources(preset);
+    return;
+  }
+  rateFieldsBuiltFor = S.meta.preset;
+  bracketEditorsBuiltFor = null;
   clear(host);
   const rateFields = [
     ['rates.fedLTCG', labels.fedLTCG || 'Capital gains rate'],
@@ -557,8 +574,20 @@ function renderProfileStep() {
   renderBracketEditors(labels);
   bindDynamic(host);
   bindDynamic($('#bracketEditors'));
+  renderSources(preset);
+}
 
-  // --- sources / omissions ---
+/** Value-only refresh for controls that were built once. */
+function syncDynamic(root) {
+  $$('[data-bind]', root).forEach((input) => {
+    if (document.activeElement === input) return;
+    const v = getPath(S, input.dataset.bind);
+    if (input.type === 'checkbox') input.checked = !!v;
+    else input.value = v === null || v === undefined ? '' : v;
+  });
+}
+
+function renderSources(preset) {
   const sb = $('#sourcesBlock');
   clear(sb);
   const badgeClass = preset.status === 'verified' ? 'verified' : preset.status === 'blank' ? 'blank' : 'experimental';
@@ -593,6 +622,18 @@ function renderProfileStep() {
 
 function renderBracketEditors(labels) {
   const host = $('#bracketEditors');
+  // Signature = preset plus the number of bands in each table. Editing a rate
+  // does not change it, so the inputs survive typing; adding or removing a band
+  // does, so the editor rebuilds exactly when it must.
+  const signature = S.meta.preset + '|' + ['stateTransferRes', 'stateTransferComm',
+    'cityTransferRes', 'cityTransferComm', 'mansion', 'mrtResidential',
+    'cgtByYears', 'sellerDutyByYears']
+    .map((k) => (S.rates[k] || []).length).join(',');
+  if (bracketEditorsBuiltFor === signature) {
+    syncDynamic(host);
+    return;
+  }
+  bracketEditorsBuiltFor = signature;
   clear(host);
   const tables = [
     ['stateTransferRes', (labels.stateTransfer || 'State transfer tax') + ' — residential', 'price'],
@@ -625,7 +666,12 @@ function renderBracketEditors(labels) {
       minInput.addEventListener('input', () => { S.rates[key][i].min = parseFloat(minInput.value) || 0; onChange(); });
       rateInput.addEventListener('input', () => { S.rates[key][i].rate = parseFloat(rateInput.value) || 0; onChange(); });
       const del = el('button', { type: 'button', class: 'btn btn-sm', text: 'Remove' });
-      del.addEventListener('click', () => { S.rates[key].splice(i, 1); onChange(); renderBracketEditors(labels); });
+      del.addEventListener('click', () => {
+        S.rates[key].splice(i, 1);
+        bracketEditorsBuiltFor = null;
+        onChange();
+        renderBracketEditors(labels);
+      });
       tbody.appendChild(el('tr', {}, [
         el('td', {}, [minInput]), el('td', {}, [rateInput]), el('td', {}, [del]),
       ]));
@@ -635,7 +681,9 @@ function renderBracketEditors(labels) {
     const add = el('button', { type: 'button', class: 'btn btn-sm', text: 'Add band' });
     add.addEventListener('click', () => {
       S.rates[key] = (S.rates[key] || []).concat([{ min: 0, rate: 0 }]).sort((a, b) => a.min - b.min);
-      onChange(); renderBracketEditors(labels);
+      bracketEditorsBuiltFor = null;
+      onChange();
+      renderBracketEditors(labels);
     });
     body.appendChild(add);
     det.appendChild(body);
@@ -1260,7 +1308,7 @@ function renderSummary() {
   $('#railSub').textContent = `${PRESETS[S.meta.preset].label} · ${h.years}-year hold`;
   $('#dockCash').textContent = money(results.purchase.cashAtClosing);
   $('#dockIrr').textContent = rt.irr === null ? 'n/a' : pct(rt.irr * 100);
-  $('#brandScenario').textContent = S.meta.name || 'Untitled scenario';
+  $('#brandScenario').textContent = PRESETS[S.meta.preset] ? PRESETS[S.meta.preset].label : '';
 }
 
 /* ================================================================== *
@@ -1357,6 +1405,7 @@ function goTo(step, moveFocus = true) {
 function applyModeVisibility() {
   const pro = S.meta.mode === 'pro';
   $$('[data-mode="pro"]').forEach((n) => { n.hidden = !pro; });
+  $$('[data-mode="quick"]').forEach((n) => { n.hidden = pro; });
   $('#modeQuick').setAttribute('aria-pressed', String(!pro));
   $('#modePro').setAttribute('aria-pressed', String(pro));
 }
@@ -1376,69 +1425,6 @@ function applyTheme(theme) {
 function currentTheme() {
   return document.documentElement.getAttribute('data-theme')
     || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-}
-
-/* ================================================================== *
- * Scenario dialog
- * ================================================================== */
-
-function renderScenarioList() {
-  const list = $('#scenarioList');
-  clear(list);
-  const all = store.listScenarios();
-  $('#scenarioEmpty').hidden = all.length > 0;
-  all.slice().reverse().forEach((sc) => {
-    const load = el('button', { type: 'button', class: 'btn btn-sm', text: 'Load' });
-    load.addEventListener('click', () => {
-      S = sc;
-      $('#scenarioDialog').close();
-      onChange();
-      announce(`Loaded scenario ${sc.meta.name}.`);
-    });
-    const dup = el('button', { type: 'button', class: 'btn btn-sm', text: 'Duplicate' });
-    dup.addEventListener('click', () => { store.saveScenario(store.duplicateScenario(sc)); renderScenarioList(); });
-    const del = el('button', { type: 'button', class: 'btn btn-sm btn-danger', text: 'Delete' });
-    del.addEventListener('click', () => {
-      store.deleteScenario(sc.meta.id);
-      renderScenarioList();
-      announce(`Deleted scenario ${sc.meta.name}.`);
-    });
-    list.appendChild(el('li', {}, [
-      el('span', { class: 'meta' }, [
-        el('span', { class: 'n', text: sc.meta.name }),
-        el('span', { class: 'd', text: `${PRESETS[sc.meta.preset] ? PRESETS[sc.meta.preset].label : sc.meta.preset} · updated ${dateLong(sc.meta.updated)}` }),
-      ]),
-      load, dup, del,
-    ]));
-  });
-}
-
-function exportScenario() {
-  const blob = new Blob([JSON.stringify(S, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = el('a', { href: url, download: `${(S.meta.name || 'scenario').replace(/[^\w.-]+/g, '-').slice(0, 60)}.json` });
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-  announce('Scenario exported as a JSON file.');
-}
-
-function importScenario(file) {
-  const reader = new FileReader();
-  reader.onload = () => {
-    let parsed;
-    try { parsed = JSON.parse(String(reader.result)); }
-    catch { announce('That file is not valid JSON and was not loaded.'); return; }
-    const migrated = store.migrate(parsed);
-    if (!migrated) { announce('That file is not a scenario this model can read.'); return; }
-    S = migrated;
-    S.meta.id = store.newId();
-    $('#scenarioDialog').close();
-    onChange();
-    announce(`Imported scenario ${S.meta.name}.`);
-  };
-  reader.readAsText(file);
 }
 
 /* ================================================================== *
@@ -1485,45 +1471,17 @@ function wire() {
   $('#f-customHold').addEventListener('input', () => renderCompareStep());
   $('#printBtn').addEventListener('click', () => window.print());
 
-  // scenario dialog
-  const dlg = $('#scenarioDialog');
-  $('#scenarioBtn').addEventListener('click', () => {
-    $('#f-scenarioName').value = S.meta.name;
-    renderScenarioList();
-    dlg.showModal();
-  });
-  $('#scenarioClose').addEventListener('click', () => dlg.close());
-  $('#f-scenarioName').addEventListener('input', (e) => {
-    S.meta.name = e.target.value.slice(0, 120);
-    $('#brandScenario').textContent = S.meta.name || 'Untitled scenario';
-  });
-  $('#sSave').addEventListener('click', () => {
-    store.saveScenario(S);
-    renderScenarioList();
-    announce(`Saved scenario ${S.meta.name}.`);
-  });
-  $('#sDuplicate').addEventListener('click', () => {
-    S = store.duplicateScenario(S);
-    store.saveScenario(S);
-    $('#f-scenarioName').value = S.meta.name;
-    renderScenarioList();
-    onChange();
-    announce(`Duplicated to ${S.meta.name}.`);
-  });
-  $('#sExport').addEventListener('click', exportScenario);
-  $('#sImport').addEventListener('click', () => $('#importFile').click());
-  $('#importFile').addEventListener('change', (e) => {
-    const f = e.target.files && e.target.files[0];
-    if (f) importScenario(f);
-    e.target.value = '';
-  });
-  $('#sReset').addEventListener('click', () => {
+  // Start over. The only scenario action the interface exposes: saving,
+  // naming, duplicating and importing named scenarios turned out to be the most
+  // confusing part of the tool for someone running a single property, and this
+  // is a calculator, not a document manager. Work is still kept safe by the
+  // silent autosave, which the welcome screen offers back as "continue".
+  $('#resetBtn').addEventListener('click', () => {
     S = store.defaultState();
     store.clearAutosave();
-    dlg.close();
     onChange();
     goTo('property');
-    announce('Reset to the default New York City scenario.');
+    announce('Started over with the default New York City scenario.');
   });
 
   // welcome dialog
@@ -1548,7 +1506,6 @@ function wire() {
   $('#wNew').addEventListener('click', () => start(store.defaultState()));
   $('#wExample').addEventListener('click', () => start(store.nycExampleState(), 'results'));
   $('#wContinue').addEventListener('click', () => start(saved || store.defaultState()));
-  $('#wLoad').addEventListener('click', () => { wel.close(); $('#scenarioBtn').click(); });
   wel.addEventListener('close', () => { if (!results) onChange(); });
 
   // keyboard: Escape closes tooltips

@@ -24,7 +24,7 @@ export function defaultState() {
     schemaVersion: SCHEMA_VERSION,
     meta: {
       id: newId(),
-      name: 'Untitled scenario',
+      name: 'New York City investment property',
       preset: 'us-nyc',
       mode: 'quick',
       created: new Date().toISOString(),

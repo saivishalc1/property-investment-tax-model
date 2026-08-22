@@ -1,37 +1,22 @@
 import { test, expect } from '@playwright/test';
 import { openApp, trackConsole } from './helpers.js';
 
-test.describe('scenario management and persistence', () => {
-  test('save, rename, duplicate, load and delete a scenario', async ({ page }) => {
+/**
+ * Saving, naming, duplicating and importing named scenarios was removed: for
+ * someone running a single property it was the most confusing part of the tool,
+ * and this is a calculator rather than a document manager. What remains is the
+ * behaviour a user actually relies on — work is never lost, and starting over
+ * is one obvious button.
+ */
+test.describe('persistence and starting over', () => {
+  test('the interface exposes no scenario-management machinery', async ({ page }) => {
     await openApp(page);
-    await page.locator('#f-price').fill('880000');
-
-    await page.getByRole('button', { name: 'Scenarios' }).click();
-    const dlg = page.locator('#scenarioDialog');
-    await expect(dlg).toBeVisible();
-
-    await page.locator('#f-scenarioName').fill('Bushwick triplex');
-    await page.locator('#sSave').click();
-    await expect(page.locator('#scenarioList')).toContainText('Bushwick triplex');
-
-    await page.locator('#sDuplicate').click();
-    await expect(page.locator('#scenarioList')).toContainText('Bushwick triplex (copy)');
-
-    // Change the live scenario, then load the saved one back.
-    await page.locator('#scenarioClose').click();
-    await page.locator('#f-price').fill('123456');
-    await page.getByRole('button', { name: 'Scenarios' }).click();
-    await page.locator('#scenarioList li', { hasText: 'Bushwick triplex (copy)' })
-      .getByRole('button', { name: 'Load' }).click();
-    await expect(page.locator('#f-price')).toHaveValue('880000');
-
-    await page.getByRole('button', { name: 'Scenarios' }).click();
-    const count = await page.locator('#scenarioList li').count();
-    await page.locator('#scenarioList li').first().getByRole('button', { name: 'Delete' }).click();
-    await expect(page.locator('#scenarioList li')).toHaveCount(count - 1);
+    await expect(page.getByRole('button', { name: 'Scenarios' })).toHaveCount(0);
+    await expect(page.locator('#scenarioDialog')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Start over' })).toBeVisible();
   });
 
-  test('autosave survives a reload and is offered as "continue"', async ({ page }) => {
+  test('work is autosaved and offered back after a reload', async ({ page }) => {
     await openApp(page);
     await page.locator('#f-price').fill('765000');
     await page.waitForTimeout(700); // debounce
@@ -42,7 +27,22 @@ test.describe('scenario management and persistence', () => {
     await expect(page.locator('#f-price')).toHaveValue('765000');
   });
 
-  test('a version 1 file imports and migrates', async ({ page }) => {
+  test('"Start over" clears the work and returns to step one', async ({ page }) => {
+    await openApp(page);
+    await page.locator('#f-price').fill('2000000');
+    await page.getByRole('button', { name: 'Start over' }).click();
+    await expect(page.locator('#f-price')).toHaveValue('950000');
+    await expect(page.locator('#panel-property')).toBeVisible();
+  });
+
+  test('the report can be given a title for the client', async ({ page }) => {
+    await openApp(page);
+    await page.locator('#stepList button[data-step="report"]').click();
+    await page.locator('#f-reportTitle').fill('42 Bergen Street — acquisition analysis');
+    await expect(page.locator('#reportRoot h2')).toHaveText('42 Bergen Street — acquisition analysis');
+  });
+
+  test('an older saved file is migrated rather than rejected', async ({ page }) => {
     await openApp(page);
     const migrated = await page.evaluate(async () => {
       const mod = await import('./src/storage.js');
@@ -58,7 +58,7 @@ test.describe('scenario management and persistence', () => {
     });
   });
 
-  test('a hostile scenario file cannot pollute the prototype chain', async ({ page }) => {
+  test('a hostile saved file cannot pollute the prototype chain', async ({ page }) => {
     await openApp(page);
     const safe = await page.evaluate(async () => {
       const mod = await import('./src/storage.js');
@@ -66,15 +66,6 @@ test.describe('scenario management and persistence', () => {
       return { pwned: ({}).pwned === undefined, stillWorks: !!globalThis.__pitm.getResults() };
     });
     expect(safe).toEqual({ pwned: true, stillWorks: true });
-  });
-
-  test('reset returns to the default scenario and clears autosave', async ({ page }) => {
-    await openApp(page);
-    await page.locator('#f-price').fill('2000000');
-    await page.getByRole('button', { name: 'Scenarios' }).click();
-    await page.locator('#sReset').click();
-    await expect(page.locator('#f-price')).toHaveValue('950000');
-    await expect(page.locator('#panel-property')).toBeVisible();
   });
 
   test('the theme choice persists across reloads', async ({ page }) => {
