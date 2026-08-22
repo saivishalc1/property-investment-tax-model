@@ -167,12 +167,38 @@ test.describe('core flow', () => {
     expect(rels.every((r) => r.includes('noopener'))).toBe(true);
   });
 
-  test('preset status is never presented as professionally verified', async ({ page }) => {
+  test('preset status claims a documentary check, never professional review', async ({ page }) => {
     await openApp(page);
-    await expect(page.locator('#presetStatusLine')).toContainText('Verified New York rules');
+    const status = page.locator('#presetStatusLine');
+    await expect(status).toContainText('Rates checked');
+    // The word "verified" on its own overstates what was done; it must not appear.
+    await expect(status).not.toContainText(/verified/i);
+
     await page.locator('#f-preset').selectOption('uk');
-    await expect(page.locator('#presetStatusLine')).toContainText('Experimental preset');
+    await expect(status).toContainText('Experimental preset');
     await expect(page.locator('#warningSummary')).toContainText('experimental preset');
+  });
+
+  test('the tax profile states exactly what was and was not checked', async ({ page }) => {
+    await openApp(page);
+    await page.locator('#modePro').click();
+    await step(page, 'profile').click();
+    const sources = page.locator('#sourcesBlock');
+    await expect(sources).toContainText('documentary check, not professional review');
+    await expect(sources).toContainText('read from the government source itself');
+    await expect(sources).toContainText('corroborating secondary sources');
+    await expect(sources).toContainText('Review by a CPA, attorney or enrolled agent — none');
+  });
+
+  test('rates are worked out from income rather than a single top rate', async ({ page }) => {
+    await openApp(page);
+    const rates = await page.evaluate(() => {
+      const r = globalThis.__pitm.getResults();
+      return { marginal: r.hold.ordinaryRate, flatTop: r.hold.flatOrdinaryRate, usingBrackets: r.hold.useBrackets };
+    });
+    expect(rates.usingBrackets).toBe(true);
+    // A $150,000 earner must not be charged at the top of the scale.
+    expect(rates.marginal).toBeLessThan(rates.flatTop - 5);
   });
 
   test('switching preset changes rates but leaves the property inputs alone', async ({ page }) => {

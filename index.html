@@ -23,7 +23,7 @@
 <link rel="icon" href="./assets/favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="./assets/icon-180.png">
 <link rel="manifest" href="./assets/site.webmanifest">
-<link rel="stylesheet" href="./src/styles.css?v=d2b8de4d2e">
+<link rel="stylesheet" href="./src/styles.css?v=9c3012ca52">
 </head>
 <body>
 
@@ -568,6 +568,25 @@
           <p class="help" id="f-serviceMonth-help">The IRS mid-month convention gives you half a month of depreciation in the month it is first available to rent.</p>
           <p class="field-error" id="f-serviceMonth-err"></p>
         </div>
+        <fieldset>
+          <legend>How should tax rates be worked out?</legend>
+          <div class="radio-row">
+            <label><input type="radio" name="rateMode" value="brackets" data-bind-radio="profile.rateMode"> From my income, using the 2026 schedules</label>
+            <label><input type="radio" name="rateMode" value="flat" data-bind-radio="profile.rateMode"> One flat rate that I enter</label>
+          </div>
+          <p class="help">Working rates out from your income is more accurate: it charges what this property actually adds to your bill, rather than the top statutory rate on every dollar. Flat mode uses the rates in "Tax rates used" below and will overstate the tax for anyone below the top bracket.</p>
+        </fieldset>
+
+        <div class="field">
+          <div class="switch-row">
+            <span class="switch-text">
+              <label for="f-activeParticipation">I actively participate in this rental</label>
+              <span class="help">Approving tenants, setting rents, arranging repairs. It unlocks the §469(i) allowance: up to $25,000 of rental losses deductible now instead of suspended, phasing out between $100,000 and $150,000 of income.</span>
+            </span>
+            <input type="checkbox" class="switch" id="f-activeParticipation" data-bind="profile.activeParticipation">
+          </div>
+        </div>
+
         <div class="field">
           <label for="f-ownerType">Ownership structure</label>
           <div class="control">
@@ -926,7 +945,7 @@
       </div>
     </div>
     <div class="dialog-foot">
-      <p class="help dialog-note">Planning software, not tax-preparation software. Not reviewed by a CPA.</p>
+      <p class="help dialog-note">Planning software, not tax-preparation software. Rates checked against published sources; not reviewed by a CPA.</p>
     </div>
   </form>
 </dialog>
@@ -939,6 +958,6 @@
   </div>
 </noscript>
 
-<script type="module" src="./src/app.js?v=d2b8de4d2e"></script>
+<script type="module" src="./src/app.js?v=9c3012ca52"></script>
 </body>
 </html>

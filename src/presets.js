@@ -3,17 +3,39 @@
  *
  * VERIFICATION STATUS
  * -------------------
- * Each preset carries a `status` field:
- *   'verified'      New York rules, checked line by line against the official
+ * Each preset carries a `status` field. The wording is deliberately narrow,
+ * because a claim of verification is only worth what was actually done:
+ *
+ *   'checked'       New York. Every rate was compared against the published
  *                   sources listed in `sources` on the date in `verified`.
- *   'experimental'  Non-US jurisdictions. Researched, but NOT independently
- *                   verified, and in several cases the engine cannot express
- *                   the local rule at all (see `omissions`). Treat these as a
- *                   starting point for your own numbers, not as an answer.
+ *                   That is a documentary check, not professional review. The
+ *                   `verification` field records, per group of rates, whether
+ *                   the figure came from a primary government source or from
+ *                   corroborating secondary sources.
+ *   'experimental'  Non-US jurisdictions. Researched, but NOT checked against
+ *                   primary sources, and in several cases the engine cannot
+ *                   express the local rule at all (see `omissions`). A starting
+ *                   point for your own numbers, not an answer.
  *   'blank'         Empty template for a jurisdiction you enter yourself.
  *
- * No preset in this file has been reviewed by a CPA, an attorney or a tax
- * adviser. Every rate is editable in the application.
+ * NO PRESET IN THIS FILE HAS BEEN REVIEWED BY A CPA, AN ATTORNEY, AN ENROLLED
+ * AGENT OR ANY OTHER TAX PROFESSIONAL, and none of it is advice. Every rate is
+ * editable in the application.
+ *
+ * Documentary check performed 2026-08-22. What it found and fixed:
+ *   - The 0.25% additional base tax on high-value conveyances applies in New
+ *     York City ONLY. The outside-NYC preset had been applying it, overstating
+ *     the transfer tax on a $3.5M sale upstate by $8,750. Corrected.
+ *   - Income tax was a single flat rate per jurisdiction. Replaced with the
+ *     real 2026 marginal schedules; see taxTables.js.
+ *   - The §469(i) $25,000 allowance was missing entirely. Implemented.
+ * Confirmed correct as they stood: the NYS 0.4% base transfer tax; the combined
+ * NYC mansion schedule from 1% to 3.9%; NYC RPTT at 1%/1.425% residential and
+ * 1.425%/2.625% commercial across the $500,000 threshold; mortgage recording
+ * tax at 1.80%/1.925% residential and 2.55% commercial net of the lender's
+ * 0.25%; the 25% ceiling on unrecaptured §1250 gain; NIIT at 3.8% with
+ * thresholds of $200,000, $250,000 and $125,000; and 27.5 and 39-year recovery
+ * periods.
  */
 
 const L_US = {
@@ -90,13 +112,13 @@ const PRESETS = {
   coopMarket: true,
   lossRule: false,
   label: 'New York State (outside NYC)', region: 'United States',
-  notes: 'NYS transfer tax and the 1% state mansion tax apply; no city RPTT or NYC income tax. Mortgage recording tax varies by county — 1.0% is typical outside the MTA region; check your county.',
+  notes: 'The 0.4% NYS transfer tax and the 1% state mansion tax apply; no city RPTT and no NYC income tax. The additional 0.25% base tax on high-value conveyances is New York City only and is therefore NOT applied here — outside the city the rate stays 0.4% at every price. Mortgage recording tax varies by county; 1.0% is typical outside the MTA region, so check your county.',
   sample: { price: 550000, rentMo: 3400, propTaxYr: 9000, insuranceYr: 1800, hoaMo: 0, otherOpexYr: 1200, capexTotal: 20000, loanRate: 6.75, downPct: 25 },
   labels: L_US,
   rates: mk({
     marginalBrackets: false,
-    stateTransferRes: [{ min: 0, rate: 0.4 }, { min: 3000000, rate: 0.65 }],
-    stateTransferComm: [{ min: 0, rate: 0.4 }, { min: 2000000, rate: 0.65 }],
+    stateTransferRes: [{ min: 0, rate: 0.4 }],
+    stateTransferComm: [{ min: 0, rate: 0.4 }],
     mansion: [{ min: 0, rate: 0 }, { min: 1000000, rate: 1.0 }],
     mrtResidential: flat(1.0), mrtCommercial: 1.0, coopExemptFromMRT: true,
     fedLTCG: 20, recapture: 25, niit: 3.8, niitEnabled: true,
@@ -468,9 +490,15 @@ const PRESETS = {
 
 const VERIFICATION = {
   'us-nyc': {
-    status: 'verified',
+    status: 'checked',
     taxYear: 2026,
-    verified: '2026-08-21',
+    verified: '2026-08-22',
+    verification: {
+      transferAndTransactionTaxes: 'primary',
+      federalIncomeAndGains: 'primary',
+      newYorkIncomeBrackets: 'secondary',
+      professionalReview: 'none',
+    },
     sources: [
       { label: 'NYS Tax Dept — Real estate transfer tax', url: 'https://www.tax.ny.gov/bus/transfer/rptidx.htm' },
       { label: 'NYS Tax Dept — Additional (mansion) tax on residential conveyances', url: 'https://www.tax.ny.gov/bus/transfer/rptmansion.htm' },
@@ -497,9 +525,15 @@ const VERIFICATION = {
     ]
   },
   'us-nys': {
-    status: 'verified',
+    status: 'checked',
     taxYear: 2026,
-    verified: '2026-08-21',
+    verified: '2026-08-22',
+    verification: {
+      transferAndTransactionTaxes: 'primary',
+      federalIncomeAndGains: 'primary',
+      newYorkIncomeBrackets: 'secondary',
+      professionalReview: 'none',
+    },
     sources: [
       { label: 'NYS Tax Dept — Real estate transfer tax', url: 'https://www.tax.ny.gov/bus/transfer/rptidx.htm' },
       { label: 'NYS Tax Dept — Additional (mansion) tax', url: 'https://www.tax.ny.gov/bus/transfer/rptmansion.htm' },

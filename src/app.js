@@ -8,10 +8,10 @@
  * static SVG strings built entirely from numbers.
  */
 
-import { computeModel, computeVariant, num } from './calculations.js?v=d2b8de4d2e';
-import { PRESETS, REGIONS } from './presets.js?v=d2b8de4d2e';
-import { validate } from './validation.js?v=d2b8de4d2e';
-import * as store from './storage.js?v=d2b8de4d2e';
+import { computeModel, computeVariant, num } from './calculations.js?v=9c3012ca52';
+import { PRESETS, REGIONS } from './presets.js?v=9c3012ca52';
+import { validate } from './validation.js?v=9c3012ca52';
+import * as store from './storage.js?v=9c3012ca52';
 
 /* ================================================================== *
  * DOM helpers
@@ -163,7 +163,7 @@ function buildPresetSelect() {
     const group = el('optgroup', { label: region });
     for (const [key, p] of Object.entries(PRESETS)) {
       if (p.region !== region) continue;
-      const suffix = p.status === 'verified' ? '' : p.status === 'blank' ? ' (blank template)' : ' (experimental)';
+      const suffix = p.status === 'checked' ? '' : p.status === 'blank' ? ' (blank template)' : ' (experimental)';
       group.appendChild(el('option', { value: key, text: p.label + suffix }));
     }
     if (group.childElementCount) sel.appendChild(group);
@@ -399,8 +399,8 @@ function renderPropertyStep() {
   const preset = PRESETS[S.meta.preset] || PRESETS['us-nyc'];
   const line = $('#presetStatusLine');
   clear(line);
-  const badgeClass = preset.status === 'verified' ? 'verified' : preset.status === 'blank' ? 'blank' : 'experimental';
-  const badgeText = preset.status === 'verified' ? 'Verified New York rules'
+  const badgeClass = preset.status === 'checked' ? 'verified' : preset.status === 'blank' ? 'blank' : 'experimental';
+  const badgeText = preset.status === 'checked' ? `Rates checked ${preset.verified}`
     : preset.status === 'blank' ? 'Blank template' : 'Experimental preset';
   line.appendChild(el('span', { class: `badge ${badgeClass}`, text: badgeText }));
   line.appendChild(document.createTextNode(' '));
@@ -590,15 +590,33 @@ function syncDynamic(root) {
 function renderSources(preset) {
   const sb = $('#sourcesBlock');
   clear(sb);
-  const badgeClass = preset.status === 'verified' ? 'verified' : preset.status === 'blank' ? 'blank' : 'experimental';
+  const badgeClass = preset.status === 'checked' ? 'verified' : preset.status === 'blank' ? 'blank' : 'experimental';
   sb.appendChild(el('p', {}, [
     el('span', {
       class: `badge ${badgeClass}`,
-      text: preset.status === 'verified' ? 'Verified' : preset.status === 'blank' ? 'Blank template' : 'Experimental',
+      text: preset.status === 'checked' ? 'Rates checked' : preset.status === 'blank' ? 'Blank template' : 'Experimental',
     }),
     ` ${preset.label} · tax year ${preset.taxYear} · rates checked ${preset.verified}`,
   ]));
   if (preset.notes) sb.appendChild(el('p', { class: 'help', text: preset.notes }));
+
+  if (preset.verification) {
+    const v = preset.verification;
+    const box = el('div', { class: 'callout info' });
+    box.appendChild(el('h4', { text: 'What "checked" means here' }));
+    box.appendChild(el('p', {
+      text: 'Every rate below was compared against the published sources on '
+        + preset.verified + '. That is a documentary check, not professional review.',
+    }));
+    const ul = el('ul');
+    const label = { primary: 'read from the government source itself', secondary: 'from corroborating secondary sources', provisional: 'provisional', none: 'none' };
+    ul.appendChild(el('li', { text: `Transfer, mansion, RPTT and mortgage recording taxes — ${label[v.transferAndTransactionTaxes] || v.transferAndTransactionTaxes}` }));
+    ul.appendChild(el('li', { text: `Federal rates, thresholds and §469 rules — ${label[v.federalIncomeAndGains] || v.federalIncomeAndGains}` }));
+    ul.appendChild(el('li', { text: `New York State and City bracket thresholds — ${label[v.newYorkIncomeBrackets] || v.newYorkIncomeBrackets}` }));
+    ul.appendChild(el('li', { text: 'Review by a CPA, attorney or enrolled agent — none' }));
+    box.appendChild(ul);
+    sb.appendChild(box);
+  }
 
   if ((preset.sources || []).length) {
     sb.appendChild(el('h4', { text: 'Official sources' }));
@@ -818,9 +836,13 @@ function renderResultsStep() {
     `cap rate on cost= year 1 NOI ÷ cost basis     = ${money(h.year1.noi)} ÷ ${money(p.costBasis)} = ${pct(rt.capRateOnCost)}`,
     `cash-on-cash    = year 1 pre-tax cash flow ÷ cash invested = ${money(h.year1.preTaxCF)} ÷ ${money(p.cashAtClosing)} = ${pct(rt.cashOnCash)}`,
     '',
-    `Income tax on the rental uses a combined ordinary rate of ${pct(h.ordinaryRate)}`,
-    `  = federal ${pct(num(S.rates.fedOrdinary))} + state ${pct(num(S.rates.stateOrdinary))} + city ${pct(h.cityOrdinaryRate)}`,
-    S.profile.nycResident ? '' : '  (city rate is zero because you are not a New York City resident)',
+    h.useBrackets
+      ? `Income tax on the rental is the tax this property ADDS to your bill: your other income of ${money(num(S.profile.otherMAGI))} is the base, and the rental result stacks on top of it through the federal, New York State and New York City schedules. That works out to ${pct(h.ordinaryRate)} on the next dollar — not the ${pct(h.flatOrdinaryRate)} top-of-scale figure.`
+      : `Flat-rate mode: a combined ordinary rate of ${pct(h.flatOrdinaryRate)} = federal ${pct(num(S.rates.fedOrdinary))} + state ${pct(num(S.rates.stateOrdinary))} + city ${pct(h.cityOrdinaryRate)}.`,
+    S.profile.nycResident ? '' : '  (no city tax: you are not a New York City resident)',
+    h.allowanceCap > 0
+      ? `§469(i) special allowance available this year: ${money(h.allowanceCap)}. Rental losses up to that amount are deductible now rather than suspended.`
+      : '',
   ]);
 
   // ---- chart ----
@@ -854,6 +876,8 @@ function renderResultsStep() {
     { label: 'Remaining balance deducted at sale', value: money(h.unamortisedFinancingAtSale) },
     { kind: 'group', label: 'Passive losses' },
     { label: S.hold.passiveAllowed ? 'Losses deducted as they arise' : 'Losses suspended under §469' , value: S.hold.passiveAllowed ? 'Yes' : 'Yes' },
+    { label: '§469(i) allowance available each year', value: money(h.allowanceCap) },
+    { label: 'Losses deducted now under that allowance', value: money(h.allowanceUsedTotal), cls: h.allowanceUsedTotal ? 'pos' : '' },
     { label: 'Suspended losses carried to the sale', value: money(h.suspendedAtSale) },
     { label: 'Released on a fully taxable disposition', value: money(s.releasedLosses) },
     { label: 'Tax benefit at your ordinary rate', value: money(s.releasedLossTaxBenefit), cls: 'pos', kind: 'total' },
@@ -922,11 +946,11 @@ function renderResultsStep() {
 
   // ---- sale tax ----
   renderTable($('#saleTaxTable'), 'Tax on the sale, by component', [
-    { label: `Depreciation recapture (§1250) — ${money(s.unrecaptured)} at ${pct(num(S.rates.recapture))}`, value: money(s.fedRecaptureTax) },
-    { label: `Federal capital gains — ${money(s.capitalGain)} at ${pct(results.meta.cgtRate)}`, value: money(s.fedCapGainsTax) },
+    { label: `Depreciation recapture (§1250) — ${money(s.unrecaptured)} at ${pct(s.effectiveRecaptureRate)}`, value: money(s.fedRecaptureTax) },
+    { label: `Federal capital gains — ${money(s.capitalGain)} at ${pct(s.effectiveCapGainsRate)}`, value: money(s.fedCapGainsTax) },
     { label: `Net investment income tax — ${money(s.niitBase)} at ${pct(num(S.rates.niit))}`, value: money(s.niitTax) },
-    { label: `New York State — ${money(s.taxableGain)} at ${pct(num(S.rates.stateCapGains))}`, value: money(s.stateGainTax) },
-    { label: `New York City — ${money(s.taxableGain)} at ${pct(s.cityGainRate)}`, value: money(s.cityGainTax) },
+    { label: `New York State — ${money(s.taxableGain)} at ${pct(s.effectiveStateRate)}`, value: money(s.stateGainTax) },
+    { label: `New York City — ${money(s.taxableGain)} at ${pct(s.effectiveCityRate)}`, value: money(s.cityGainTax) },
     { label: 'Total tax on the sale', value: money(s.totalSaleTax), kind: 'total' },
     { label: 'Effective rate on the gain', value: pct(s.effectiveGainRate), kind: 'sub' },
     { kind: 'group', label: 'Separately, at your ordinary rate' },
@@ -945,7 +969,11 @@ function renderResultsStep() {
       ? `New York City tax applies at ${pct(s.cityGainRate)} because you are a city resident.`
       : 'New York City tax is zero because you are not a city resident. New York State tax still applies to New York-source gain.',
     '',
-    `Each tax has its own base. Recapture is taxed at ${pct(num(S.rates.recapture))} on ${money(s.unrecaptured)} only; the ${pct(results.meta.cgtRate)} long-term rate applies only to the ${money(s.capitalGain)} above it. New York taxes the whole gain at one rate because it has no preferential capital gains rate.`,
+    `Each tax has its own base. Recapture applies to ${money(s.unrecaptured)} only; the long-term rate applies only to the ${money(s.capitalGain)} above it. New York has no preferential capital gains rate, so the whole gain runs through its ordinary schedule.`,
+    '',
+    h.useBrackets
+      ? `Rates are worked out from your income, not from a single top rate. Your other income of ${money(num(S.profile.otherMAGI))} is the starting point; this property's income and gain stack on top of it and run through the ${results.meta.taxYear || 2026} schedules. Unrecaptured §1250 gain is taxed at ordinary rates capped at 25% — the cap is a ceiling, not a flat rate, so ${pct(s.effectiveRecaptureRate)} is what actually applies here.`
+      : `Flat-rate mode: one marginal rate is applied to everything, using the rates you entered. This overstates the tax for anyone below the top bracket.`,
   ]);
 
   // ---- returns ----
@@ -1140,8 +1168,8 @@ function renderReportStep() {
 
   const statusBox = el('p', {}, [
     el('span', {
-      class: `badge ${preset.status === 'verified' ? 'verified' : preset.status === 'blank' ? 'blank' : 'experimental'}`,
-      text: preset.status === 'verified' ? 'Verified New York rules' : preset.status === 'blank' ? 'Blank template' : 'Experimental preset — unverified',
+      class: `badge ${preset.status === 'checked' ? 'verified' : preset.status === 'blank' ? 'blank' : 'experimental'}`,
+      text: preset.status === 'checked' ? `Rates checked ${preset.verified}` : preset.status === 'blank' ? 'Blank template' : 'Experimental preset — unverified',
     }),
   ]);
   root.appendChild(statusBox);
@@ -1267,7 +1295,7 @@ function renderReportStep() {
   section('Limitations', limNode);
 
   const disc = el('div', { class: 'disclaimer' });
-  disc.appendChild(el('p', { text: 'This is planning software, not tax-preparation software. It produces an estimate from the assumptions entered above, using published statutory rates. It has not been reviewed or validated by a certified public accountant, an attorney, an enrolled agent or any other tax professional, and no such review is claimed.' }));
+  disc.appendChild(el('p', { text: 'This is planning software, not tax-preparation software. It produces an estimate from the assumptions entered above, using published statutory rates. Those rates were compared against the government sources listed above on ' + (preset.verified || 'the date shown') + '; that is a documentary check only. It has not been reviewed or validated by a certified public accountant, an attorney, an enrolled agent or any other tax professional, and no such review is claimed.' }));
   disc.appendChild(el('p', { text: 'Real transactions turn on facts this model does not capture: your full bracket structure, other income and losses, state residency and sourcing, entity structure, withholding obligations, elections and deadlines. Nothing here is tax, legal or investment advice. Confirm every figure with a qualified adviser before acting on it.' }));
   disc.appendChild(el('p', { text: 'All figures are computed in your browser. No input is transmitted, logged or stored anywhere outside this device.' }));
   section('Disclaimer', disc);

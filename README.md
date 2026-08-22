@@ -135,7 +135,9 @@ minimum touch targets. Native HTML is used before ARIA throughout.
 
 ## Supported scope
 
-**Verified — New York.**
+**Checked — New York.** Every rate compared against the published government
+sources on 2026-08-22. That is a documentary check, not professional review;
+nothing here has been seen by a CPA, an attorney or an enrolled agent.
 
 - New York City, and New York State outside the city.
 - Residential, co-op and commercial property.
@@ -246,27 +248,45 @@ equivalent beside it. IRR is found by bisection on the net present value —
 approximation, and it returns `null` rather than a misleading number when the
 cash-flow stream has no sign change.
 
-**Sources.** Each preset lists its sources and its tax year in the interface
-and in the report. New York rates are drawn from the New York State Department
-of Taxation and Finance, the New York City Department of Finance and the IRS;
-the links are in the app under *Your tax profile → Where these numbers come
-from*. Rates are stated as checked on 2026-08-21 for tax year 2026 — verify
-them before relying on any figure.
+**Income tax is marginal, not a single top rate.** The model computes what this
+property *adds* to your bill: your other income is the base, and the property's
+income and gain stack on top of it and run through the real 2026 schedules —
+federal, New York State and New York City. This matters more than it sounds. A
+$150,000 single earner faces a 24% federal marginal rate, not 37%; charging the
+top rate overstated the tax on rental income and, because suspended losses are
+released at that same rate, overstated the benefit of the release by about
+$22,000 on the default scenario. Long-term gain stacks above ordinary income to
+find its 0/15/20 band rather than being charged at 20% throughout, and
+unrecaptured §1250 gain is taxed at ordinary rates *capped* at 25% — the 25% is
+a ceiling, not a flat rate. Professional mode can switch back to a single flat
+rate for anyone who wants to drive the rates by hand.
+
+**§469(i) special allowance.** An actively participating individual may deduct
+up to $25,000 of rental losses immediately rather than suspending them, reduced
+by 50 cents per dollar of income above $100,000 and gone at $150,000. This
+applies to exactly the audience the tool is built for.
+
+**Sources and how far they were checked.** Each preset lists its sources, its
+tax year and — under *Your tax profile → Where these numbers come from* — the
+provenance of each group of rates: whether the figure was read from the
+government source itself, or taken from corroborating secondary sources. Transfer,
+mansion, RPTT and mortgage recording taxes, and all federal rates and thresholds,
+came from primary sources. New York State and City bracket thresholds came from
+corroborating secondary sources, because the State publishes its 2026 schedule
+only inside withholding formulas. Verify anything you intend to rely on.
 
 ## Known omissions
 
 The application lists these per preset; for New York they are:
 
 - IT-2663 nonresident estimated income tax on the sale of NY real property.
+- Bracket thresholds are applied to your stated income directly: the standard
+  deduction and any itemised deductions are not subtracted first, so the marginal
+  rate can read slightly high near a bracket edge.
 - The §121 principal-residence exclusion (this is an investment-property model).
 - Grossing-up of consideration when the buyer pays the seller's transfer tax.
 - Real estate professional status under §469(c)(7).
-- The §469 $25,000 active-participation allowance and its MAGI phase-out.
 - The §199A qualified business income deduction.
-- §1250 recapture is applied at a flat 25% cap rather than the lesser of 25%
-  and your marginal rate.
-- Federal and New York brackets are entered as single marginal rates, not full
-  bracket tables.
 - The SALT deduction, AMT, and entity-level tax for corporate owners.
 - FIRPTA withholding and treaty relief for non-resident sellers.
 - For §1031: the 45-day identification and 180-day closing deadlines,

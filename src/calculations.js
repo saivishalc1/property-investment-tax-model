@@ -10,6 +10,11 @@
  * Nothing in this file is tax advice. See README.md § Methodology.
  */
 
+import {
+  FEDERAL_ORDINARY, FEDERAL_LTCG, NEW_YORK_STATE, NEW_YORK_CITY,
+  SECTION_469_ALLOWANCE, TAX_YEAR,
+} from './taxTables.js?v=9c3012ca52';
+
 /** Coerce anything to a finite number; non-numeric input becomes 0. */
 export function num(v) {
   const n = typeof v === 'number' ? v : parseFloat(v);
@@ -64,6 +69,66 @@ export function bracketTax(table, value, marginal) {
     if (value > lo) tax += (Math.min(value, hi) - lo) * num(table[i].rate) / 100;
   }
   return tax;
+}
+
+/* ------------------------------------------------------------------ *
+ * Progressive income tax
+ * ------------------------------------------------------------------ *
+ * Distinct from the transfer-tax tables above in one important way: income tax
+ * is always marginal. A rate table here is [{min, rate}] and every slice of
+ * income is taxed at its own rate, never the whole amount at the top rate.
+ */
+
+/** Total tax on `income` under a marginal bracket table. */
+export function progressiveTax(brackets, income) {
+  return bracketTax(brackets, Math.max(0, num(income)), true);
+}
+
+/**
+ * Tax on `amount` when it is stacked on top of `base` income.
+ *
+ * This is the number that actually matters for a property decision: not the
+ * average rate on all income, and not the top statutory rate, but what this
+ * property adds to the bill. A negative `amount` (a deductible loss) correctly
+ * returns a negative tax, i.e. a saving.
+ */
+export function marginalTax(brackets, base, amount) {
+  const b = Math.max(0, num(base));
+  const withAmount = Math.max(0, b + num(amount));
+  return progressiveTax(brackets, withAmount) - progressiveTax(brackets, b);
+}
+
+/**
+ * Long-term capital gains tax, stacked above ordinary income.
+ *
+ * Capital gain sits on top of ordinary income when deciding which of the 0/15/20
+ * bands it falls in, so a modest earner with a large gain pays across several
+ * bands rather than all of it at 20%.
+ */
+export function longTermGainTax(ltcgBrackets, ordinaryIncome, gain) {
+  return marginalTax(ltcgBrackets, ordinaryIncome, gain);
+}
+
+/**
+ * §469(i) special allowance: how much of a rental loss an actively
+ * participating individual may deduct now rather than suspend.
+ */
+export function section469Allowance(magi, filingStatus) {
+  const rule = SECTION_469_ALLOWANCE[filingStatus] || SECTION_469_ALLOWANCE.single;
+  if (rule.max === 0) return 0;
+  const over = Math.max(0, num(magi) - rule.phaseStart);
+  return Math.max(0, rule.max - over * 0.5);
+}
+
+/** The rate tables for a filing status, or flat-rate fallbacks. */
+export function tablesFor(filingStatus) {
+  const fs = FEDERAL_ORDINARY[filingStatus] ? filingStatus : 'single';
+  return {
+    fedOrdinary: FEDERAL_ORDINARY[fs],
+    fedLTCG: FEDERAL_LTCG[fs],
+    state: NEW_YORK_STATE[fs],
+    city: NEW_YORK_CITY[fs],
+  };
 }
 
 /* ------------------------------------------------------------------ *
@@ -305,8 +370,42 @@ export function computeModel(S) {
   const loanTermYears = Math.max(1, num(P.loanTermYrs));
   const annualFinancingDeduction = loan > 0 ? financingCosts / loanTermYears : 0;
 
-  const cityOrdinaryRate = PR.nycResident === false ? 0 : num(R.cityOrdinary);
-  const ordinaryRate = num(R.fedOrdinary) + num(R.stateOrdinary) + cityOrdinaryRate;
+  /* --- how ordinary income tax is worked out -----------------------
+     'brackets' (the default) computes what this property ADDS to the
+     investor's bill, by stacking its income on their other income and running
+     it through the real 2026 schedules. 'flat' keeps the older behaviour of
+     applying one marginal rate to everything, which is what a professional
+     overriding the rates by hand is asking for. */
+  const useBrackets = PR.rateMode !== 'flat';
+  const T = tablesFor(PR.filingStatus);
+  // Two conditions, both required: the jurisdiction has to levy a city income
+  // tax at all, and this investor has to be resident in it. A preset with no
+  // city income tax must never pick one up from the residency toggle.
+  const cityApplies = PR.nycResident !== false
+    && (num(R.cityOrdinary) > 0 || num(R.cityCapGains) > 0);
+  const isNycResident = cityApplies;
+  const magiBase = Math.max(0, num(PR.otherMAGI));
+
+  /** Tax this property adds, for an amount of ordinary income (or a loss). */
+  const ordinaryTaxOn = (amount, base = magiBase) => {
+    if (!useBrackets) return amount * flatOrdinaryRate / 100;
+    let t = marginalTax(T.fedOrdinary, base, amount) + marginalTax(T.state, base, amount);
+    if (isNycResident) t += marginalTax(T.city, base, amount);
+    return t;
+  };
+
+  const cityOrdinaryRate = isNycResident ? num(R.cityOrdinary) : 0;
+  const flatOrdinaryRate = num(R.fedOrdinary) + num(R.stateOrdinary) + cityOrdinaryRate;
+  // Reported for display: the marginal rate this investor actually faces on the
+  // next dollar of rental income, rather than the top statutory rate.
+  const ordinaryRate = useBrackets
+    ? (magiBase >= 0 ? ordinaryTaxOn(1000) / 1000 * 100 : flatOrdinaryRate)
+    : flatOrdinaryRate;
+
+  // §469(i): an actively participating individual may deduct up to $25,000 of
+  // rental losses now, phased out between $100,000 and $150,000 of MAGI.
+  const allowanceCap = PR.activeParticipation === false
+    ? 0 : section469Allowance(magiBase, PR.filingStatus);
 
   let accumDep = 0;
   let suspended = 0;
@@ -382,15 +481,19 @@ export function computeModel(S) {
     }
 
     let ordinaryTax = 0;
+    let allowanceUsed = 0;
     if (taxable > 0) {
-      ordinaryTax = taxable * ordinaryRate / 100;
+      ordinaryTax = ordinaryTaxOn(taxable);
     } else if (taxable < 0) {
       if (H.passiveAllowed) {
         // Losses usable now: a negative tax is a genuine cash benefit.
-        ordinaryTax = taxable * ordinaryRate / 100;
+        ordinaryTax = ordinaryTaxOn(taxable);
       } else {
-        // §469: suspended, carried forward, released on full disposition.
-        suspended += -taxable;
+        // §469(i) first: up to the special allowance is deductible this year,
+        // and only what exceeds it is suspended and carried to the sale.
+        allowanceUsed = Math.min(-taxable, allowanceCap);
+        if (allowanceUsed > 0) ordinaryTax = ordinaryTaxOn(-allowanceUsed);
+        suspended += -taxable - allowanceUsed;
         taxable = 0;
       }
     }
@@ -415,13 +518,15 @@ export function computeModel(S) {
       interest: sch.interest, principalPaid: sch.principal, debtService, balance: sch.balance,
       dep, accumDep, depFactor: buildingFactor, financingDeduction,
       capexCash, netRental, taxable, usedSuspended, suspendedBalance: suspended,
-      ordinaryTax, niitTax: holdNiit.tax, tax, preTaxCF, afterTaxCF,
+      ordinaryTax, allowanceUsed, niitTax: holdNiit.tax, tax, preTaxCF, afterTaxCF,
       dscr: debtService > 0 ? noi / debtService : null,
     });
   }
 
   const hold = {
-    years, ordinaryRate, cityOrdinaryRate, depLife, annualDep, annualCapexDep,
+    years, ordinaryRate, flatOrdinaryRate, useBrackets, allowanceCap,
+    allowanceUsedTotal: table.reduce((a, y) => a + y.allowanceUsed, 0),
+    cityOrdinaryRate, depLife, annualDep, annualCapexDep,
     placedFraction, saleFraction, capexYear, capexTotal, capexSpread,
     annualFinancingDeduction, financingAmortised,
     unamortisedFinancingAtSale: Math.max(0, financingCosts - financingAmortised),
@@ -473,16 +578,34 @@ export function computeModel(S) {
   const unrecaptured = Math.min(accumDep, taxableGain);
   const capitalGain = Math.max(0, taxableGain - unrecaptured);
 
-  const fedRecaptureTax = unrecaptured * num(R.recapture) / 100;
-  const fedCapGainsTax = capitalGain * cgtRate / 100;
+  /* Unrecaptured §1250 gain is taxed at ordinary rates but capped at 25%. The
+     statutory 25% is a ceiling, not a flat rate: an investor whose marginal
+     rate is below it pays the lower figure. */
+  const fedRecaptureTax = useBrackets
+    ? Math.min(marginalTax(T.fedOrdinary, magiBase, unrecaptured), unrecaptured * num(R.recapture) / 100)
+    : unrecaptured * num(R.recapture) / 100;
+
+  /* Long-term gain stacks above ordinary income AND above the recapture, which
+     has already filled part of the ordinary band, so a modest earner with a
+     large gain pays across the 0/15/20 bands rather than all of it at 20%. */
+  const fedCapGainsTax = useBrackets
+    ? longTermGainTax(T.fedLTCG, magiBase + unrecaptured, capitalGain)
+    : capitalGain * cgtRate / 100;
 
   const niitOnSale = R.niitEnabled
     ? niitTax(taxableGain, num(PR.otherMAGI), PR.filingStatus, num(R.niit))
     : { base: 0, tax: 0, threshold: NIIT_THRESHOLDS[PR.filingStatus] || NIIT_THRESHOLDS.single };
 
-  const stateGainTax = taxableGain * num(R.stateCapGains) / 100;
-  const cityGainRate = PR.nycResident === false ? 0 : num(R.cityCapGains);
-  const cityGainTax = taxableGain * cityGainRate / 100;
+  /* New York has no preferential rate for capital gains: the whole gain is
+     ordinary income, so it runs through the ordinary schedule stacked on the
+     investor's other income. */
+  const stateGainTax = useBrackets
+    ? marginalTax(T.state, magiBase, taxableGain)
+    : taxableGain * num(R.stateCapGains) / 100;
+  const cityGainRate = isNycResident ? num(R.cityCapGains) : 0;
+  const cityGainTax = !isNycResident ? 0
+    : useBrackets ? marginalTax(T.city, magiBase, taxableGain)
+    : taxableGain * cityGainRate / 100;
 
   const totalSaleTax = fedRecaptureTax + fedCapGainsTax + niitOnSale.tax + stateGainTax + cityGainTax;
 
@@ -491,10 +614,12 @@ export function computeModel(S) {
   // They are a separate ordinary-rate item — they do not net against the gain
   // before the capital-gain and recapture rates are applied.
   const releasedLosses = PR.fullDisposition !== false ? suspended : 0;
-  const releasedLossTaxBenefit = releasedLosses * ordinaryRate / 100;
+  // A deduction, so the benefit is the tax it removes: pass it as a negative
+  // amount and flip the sign.
+  const releasedLossTaxBenefit = -ordinaryTaxOn(-releasedLosses);
 
   // A loss on the sale of business/investment realty is an ordinary §1231 loss.
-  const lossTaxBenefit = lossOnSale * ordinaryRate / 100;
+  const lossTaxBenefit = -ordinaryTaxOn(-lossOnSale);
 
   const loanPayoff = hold.loanBalanceAtSale;
   const grossProceeds = amountRealized - loanPayoff;
@@ -510,6 +635,10 @@ export function computeModel(S) {
     fedRecaptureTax, fedCapGainsTax,
     niitTax: niitOnSale.tax, niitBase: niitOnSale.base, niitThreshold: niitOnSale.threshold,
     stateGainTax, cityGainTax, cityGainRate, totalSaleTax,
+    effectiveRecaptureRate: unrecaptured > 0 ? fedRecaptureTax / unrecaptured * 100 : 0,
+    effectiveCapGainsRate: capitalGain > 0 ? fedCapGainsTax / capitalGain * 100 : 0,
+    effectiveStateRate: taxableGain > 0 ? stateGainTax / taxableGain * 100 : 0,
+    effectiveCityRate: taxableGain > 0 ? cityGainTax / taxableGain * 100 : 0,
     releasedLosses, releasedLossTaxBenefit,
     loanPayoff, grossProceeds, netProceeds,
     effectiveGainRate: taxableGain > 0 ? totalSaleTax / taxableGain * 100 : 0,
@@ -574,7 +703,10 @@ export function computeModel(S) {
     deferredRecapture: unrecaptured,
   };
 
-  return { purchase, hold, sale, returns, exchange, meta: { ordinaryRate, cgtRate, depLife } };
+  return {
+    purchase, hold, sale, returns, exchange,
+    meta: { ordinaryRate, cgtRate, depLife, taxYear: TAX_YEAR, useBrackets },
+  };
 }
 
 /**

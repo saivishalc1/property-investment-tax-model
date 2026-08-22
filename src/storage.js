@@ -6,7 +6,7 @@
  * and none anywhere else in the application.
  */
 
-import { PRESETS } from './presets.js?v=d2b8de4d2e';
+import { PRESETS } from './presets.js?v=9c3012ca52';
 
 export const SCHEMA_VERSION = 3;
 const NS = 'pitm';
@@ -41,6 +41,8 @@ export function defaultState() {
       capexYear: 1,
       capexMonth: 7,
       niitOnRental: true,
+      rateMode: 'brackets',
+      activeParticipation: true,
     },
     purchase: {
       price: 950000,

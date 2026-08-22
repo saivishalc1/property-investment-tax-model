@@ -189,7 +189,15 @@ test('suspended losses accumulate, release at sale, and never touch the gain', (
   close(r.hold.suspendedAtSale, totalLoss - totalUsed, 0.01);
 
   // The release is an ordinary-rate benefit, kept apart from gain and recapture.
-  close(r.sale.releasedLossTaxBenefit, r.sale.releasedLosses * r.hold.ordinaryRate / 100, 0.01);
+  // Under the bracket engine it is worth the tax it actually removes, stacked
+  // on the investor's other income — not the top statutory rate.
+  assert.ok(r.sale.releasedLossTaxBenefit > 0);
+  const flatState = structuredClone(s);
+  flatState.profile.rateMode = 'flat';
+  const flat = computeModel(flatState);
+  close(flat.sale.releasedLossTaxBenefit, flat.sale.releasedLosses * flat.hold.flatOrdinaryRate / 100, 0.01);
+  assert.ok(r.sale.releasedLossTaxBenefit < flat.sale.releasedLossTaxBenefit,
+    'a $150k earner should not get the benefit at the top marginal rate');
   const noLossState = structuredClone(s);
   noLossState.hold.rentMo = 3000;
   const gainOnly = computeModel(noLossState).sale;
@@ -206,7 +214,7 @@ test('when losses are deductible currently, nothing is suspended and the benefit
   s.hold.passiveAllowed = true;
   const r = computeModel(s);
   assert.equal(r.hold.suspendedAtSale, 0);
-  assert.equal(r.sale.releasedLossTaxBenefit, 0);
+  assert.equal(r.sale.releasedLossTaxBenefit, -0);
   assert.ok(r.hold.table.some((y) => y.tax < 0), 'a loss year produces a negative tax, i.e. a benefit');
 });
 
@@ -217,7 +225,7 @@ test('suspended losses are not released unless the disposition is fully taxable'
   const r = computeModel(s);
   assert.ok(r.hold.suspendedAtSale > 0);
   assert.equal(r.sale.releasedLosses, 0);
-  assert.equal(r.sale.releasedLossTaxBenefit, 0);
+  close(r.sale.releasedLossTaxBenefit, 0, 1e-9);
 });
 
 /* ---------------- gain composition ---------------- */
@@ -226,8 +234,13 @@ test('depreciation is recaptured first, then the remainder is long-term gain', (
   const r = computeModel(defaultState());
   close(r.sale.unrecaptured + r.sale.capitalGain, r.sale.taxableGain, 0.01);
   assert.ok(r.sale.unrecaptured <= r.sale.accumDep + 1e-6);
+  // 25% is a ceiling on unrecaptured §1250 gain, not a flat rate: this investor
+  // is above it, so the cap binds.
   close(r.sale.fedRecaptureTax, r.sale.unrecaptured * 25 / 100, 0.01);
-  close(r.sale.fedCapGainsTax, r.sale.capitalGain * 20 / 100, 0.01);
+  // Long-term gain stacks above ordinary income, so part of it lands in the 15%
+  // band rather than all of it at 20%.
+  assert.ok(r.sale.fedCapGainsTax < r.sale.capitalGain * 20 / 100);
+  assert.ok(r.sale.fedCapGainsTax > r.sale.capitalGain * 15 / 100 - 1);
 });
 
 test('when the gain is smaller than the depreciation taken, it is ALL recapture', () => {
@@ -245,7 +258,8 @@ test('a loss on sale produces an ordinary §1231 benefit and no gain tax', () =>
   assert.ok(r.sale.totalGain < 0);
   assert.equal(r.sale.taxableGain, 0);
   assert.equal(r.sale.totalSaleTax, 0);
-  close(r.sale.lossTaxBenefit, r.sale.lossOnSale * r.hold.ordinaryRate / 100, 0.01);
+  assert.ok(r.sale.lossTaxBenefit > 0, 'a §1231 loss is deductible against ordinary income');
+  assert.ok(r.sale.lossTaxBenefit < r.sale.lossOnSale * 0.5, 'and is worth the tax it removes, not more');
 });
 
 /* ---------------- NIIT ---------------- */
@@ -308,6 +322,8 @@ test('New York State outside the city has no city transfer tax and no city incom
   assert.equal(r.sale.cityGainTax, 0);
   assert.ok(r.purchase.stateTransfer > 0);
   assert.ok(r.purchase.mansionTax > 0, 'the 1% state mansion tax still applies above $1M');
+  // The additional 0.25% base tax on high-value conveyances is NYC-only.
+  close(r.purchase.stateTransfer, 1200000 * 0.4 / 100, 0.01);
 });
 
 /* ---------------- sale proceeds ---------------- */

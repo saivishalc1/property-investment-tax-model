@@ -1412,6 +1412,25 @@ dialog::backdrop { background: rgba(10, 12, 16, .55); }
           <p class="help" id="f-serviceMonth-help">The IRS mid-month convention gives you half a month of depreciation in the month it is first available to rent.</p>
           <p class="field-error" id="f-serviceMonth-err"></p>
         </div>
+        <fieldset>
+          <legend>How should tax rates be worked out?</legend>
+          <div class="radio-row">
+            <label><input type="radio" name="rateMode" value="brackets" data-bind-radio="profile.rateMode"> From my income, using the 2026 schedules</label>
+            <label><input type="radio" name="rateMode" value="flat" data-bind-radio="profile.rateMode"> One flat rate that I enter</label>
+          </div>
+          <p class="help">Working rates out from your income is more accurate: it charges what this property actually adds to your bill, rather than the top statutory rate on every dollar. Flat mode uses the rates in "Tax rates used" below and will overstate the tax for anyone below the top bracket.</p>
+        </fieldset>
+
+        <div class="field">
+          <div class="switch-row">
+            <span class="switch-text">
+              <label for="f-activeParticipation">I actively participate in this rental</label>
+              <span class="help">Approving tenants, setting rents, arranging repairs. It unlocks the §469(i) allowance: up to $25,000 of rental losses deductible now instead of suspended, phasing out between $100,000 and $150,000 of income.</span>
+            </span>
+            <input type="checkbox" class="switch" id="f-activeParticipation" data-bind="profile.activeParticipation">
+          </div>
+        </div>
+
         <div class="field">
           <label for="f-ownerType">Ownership structure</label>
           <div class="control">
@@ -1770,7 +1789,7 @@ dialog::backdrop { background: rgba(10, 12, 16, .55); }
       </div>
     </div>
     <div class="dialog-foot">
-      <p class="help dialog-note">Planning software, not tax-preparation software. Not reviewed by a CPA.</p>
+      <p class="help dialog-note">Planning software, not tax-preparation software. Rates checked against published sources; not reviewed by a CPA.</p>
     </div>
   </form>
 </dialog>
@@ -1797,6 +1816,7 @@ dialog::backdrop { background: rgba(10, 12, 16, .55); }
  *
  * Nothing in this file is tax advice. See README.md § Methodology.
  */
+
 
 /** Coerce anything to a finite number; non-numeric input becomes 0. */
 function num(v) {
@@ -1852,6 +1872,66 @@ function bracketTax(table, value, marginal) {
     if (value > lo) tax += (Math.min(value, hi) - lo) * num(table[i].rate) / 100;
   }
   return tax;
+}
+
+/* ------------------------------------------------------------------ *
+ * Progressive income tax
+ * ------------------------------------------------------------------ *
+ * Distinct from the transfer-tax tables above in one important way: income tax
+ * is always marginal. A rate table here is [{min, rate}] and every slice of
+ * income is taxed at its own rate, never the whole amount at the top rate.
+ */
+
+/** Total tax on `income` under a marginal bracket table. */
+function progressiveTax(brackets, income) {
+  return bracketTax(brackets, Math.max(0, num(income)), true);
+}
+
+/**
+ * Tax on `amount` when it is stacked on top of `base` income.
+ *
+ * This is the number that actually matters for a property decision: not the
+ * average rate on all income, and not the top statutory rate, but what this
+ * property adds to the bill. A negative `amount` (a deductible loss) correctly
+ * returns a negative tax, i.e. a saving.
+ */
+function marginalTax(brackets, base, amount) {
+  const b = Math.max(0, num(base));
+  const withAmount = Math.max(0, b + num(amount));
+  return progressiveTax(brackets, withAmount) - progressiveTax(brackets, b);
+}
+
+/**
+ * Long-term capital gains tax, stacked above ordinary income.
+ *
+ * Capital gain sits on top of ordinary income when deciding which of the 0/15/20
+ * bands it falls in, so a modest earner with a large gain pays across several
+ * bands rather than all of it at 20%.
+ */
+function longTermGainTax(ltcgBrackets, ordinaryIncome, gain) {
+  return marginalTax(ltcgBrackets, ordinaryIncome, gain);
+}
+
+/**
+ * §469(i) special allowance: how much of a rental loss an actively
+ * participating individual may deduct now rather than suspend.
+ */
+function section469Allowance(magi, filingStatus) {
+  const rule = SECTION_469_ALLOWANCE[filingStatus] || SECTION_469_ALLOWANCE.single;
+  if (rule.max === 0) return 0;
+  const over = Math.max(0, num(magi) - rule.phaseStart);
+  return Math.max(0, rule.max - over * 0.5);
+}
+
+/** The rate tables for a filing status, or flat-rate fallbacks. */
+function tablesFor(filingStatus) {
+  const fs = FEDERAL_ORDINARY[filingStatus] ? filingStatus : 'single';
+  return {
+    fedOrdinary: FEDERAL_ORDINARY[fs],
+    fedLTCG: FEDERAL_LTCG[fs],
+    state: NEW_YORK_STATE[fs],
+    city: NEW_YORK_CITY[fs],
+  };
 }
 
 /* ------------------------------------------------------------------ *
@@ -2093,8 +2173,42 @@ function computeModel(S) {
   const loanTermYears = Math.max(1, num(P.loanTermYrs));
   const annualFinancingDeduction = loan > 0 ? financingCosts / loanTermYears : 0;
 
-  const cityOrdinaryRate = PR.nycResident === false ? 0 : num(R.cityOrdinary);
-  const ordinaryRate = num(R.fedOrdinary) + num(R.stateOrdinary) + cityOrdinaryRate;
+  /* --- how ordinary income tax is worked out -----------------------
+     'brackets' (the default) computes what this property ADDS to the
+     investor's bill, by stacking its income on their other income and running
+     it through the real 2026 schedules. 'flat' keeps the older behaviour of
+     applying one marginal rate to everything, which is what a professional
+     overriding the rates by hand is asking for. */
+  const useBrackets = PR.rateMode !== 'flat';
+  const T = tablesFor(PR.filingStatus);
+  // Two conditions, both required: the jurisdiction has to levy a city income
+  // tax at all, and this investor has to be resident in it. A preset with no
+  // city income tax must never pick one up from the residency toggle.
+  const cityApplies = PR.nycResident !== false
+    && (num(R.cityOrdinary) > 0 || num(R.cityCapGains) > 0);
+  const isNycResident = cityApplies;
+  const magiBase = Math.max(0, num(PR.otherMAGI));
+
+  /** Tax this property adds, for an amount of ordinary income (or a loss). */
+  const ordinaryTaxOn = (amount, base = magiBase) => {
+    if (!useBrackets) return amount * flatOrdinaryRate / 100;
+    let t = marginalTax(T.fedOrdinary, base, amount) + marginalTax(T.state, base, amount);
+    if (isNycResident) t += marginalTax(T.city, base, amount);
+    return t;
+  };
+
+  const cityOrdinaryRate = isNycResident ? num(R.cityOrdinary) : 0;
+  const flatOrdinaryRate = num(R.fedOrdinary) + num(R.stateOrdinary) + cityOrdinaryRate;
+  // Reported for display: the marginal rate this investor actually faces on the
+  // next dollar of rental income, rather than the top statutory rate.
+  const ordinaryRate = useBrackets
+    ? (magiBase >= 0 ? ordinaryTaxOn(1000) / 1000 * 100 : flatOrdinaryRate)
+    : flatOrdinaryRate;
+
+  // §469(i): an actively participating individual may deduct up to $25,000 of
+  // rental losses now, phased out between $100,000 and $150,000 of MAGI.
+  const allowanceCap = PR.activeParticipation === false
+    ? 0 : section469Allowance(magiBase, PR.filingStatus);
 
   let accumDep = 0;
   let suspended = 0;
@@ -2170,15 +2284,19 @@ function computeModel(S) {
     }
 
     let ordinaryTax = 0;
+    let allowanceUsed = 0;
     if (taxable > 0) {
-      ordinaryTax = taxable * ordinaryRate / 100;
+      ordinaryTax = ordinaryTaxOn(taxable);
     } else if (taxable < 0) {
       if (H.passiveAllowed) {
         // Losses usable now: a negative tax is a genuine cash benefit.
-        ordinaryTax = taxable * ordinaryRate / 100;
+        ordinaryTax = ordinaryTaxOn(taxable);
       } else {
-        // §469: suspended, carried forward, released on full disposition.
-        suspended += -taxable;
+        // §469(i) first: up to the special allowance is deductible this year,
+        // and only what exceeds it is suspended and carried to the sale.
+        allowanceUsed = Math.min(-taxable, allowanceCap);
+        if (allowanceUsed > 0) ordinaryTax = ordinaryTaxOn(-allowanceUsed);
+        suspended += -taxable - allowanceUsed;
         taxable = 0;
       }
     }
@@ -2203,13 +2321,15 @@ function computeModel(S) {
       interest: sch.interest, principalPaid: sch.principal, debtService, balance: sch.balance,
       dep, accumDep, depFactor: buildingFactor, financingDeduction,
       capexCash, netRental, taxable, usedSuspended, suspendedBalance: suspended,
-      ordinaryTax, niitTax: holdNiit.tax, tax, preTaxCF, afterTaxCF,
+      ordinaryTax, allowanceUsed, niitTax: holdNiit.tax, tax, preTaxCF, afterTaxCF,
       dscr: debtService > 0 ? noi / debtService : null,
     });
   }
 
   const hold = {
-    years, ordinaryRate, cityOrdinaryRate, depLife, annualDep, annualCapexDep,
+    years, ordinaryRate, flatOrdinaryRate, useBrackets, allowanceCap,
+    allowanceUsedTotal: table.reduce((a, y) => a + y.allowanceUsed, 0),
+    cityOrdinaryRate, depLife, annualDep, annualCapexDep,
     placedFraction, saleFraction, capexYear, capexTotal, capexSpread,
     annualFinancingDeduction, financingAmortised,
     unamortisedFinancingAtSale: Math.max(0, financingCosts - financingAmortised),
@@ -2261,16 +2381,34 @@ function computeModel(S) {
   const unrecaptured = Math.min(accumDep, taxableGain);
   const capitalGain = Math.max(0, taxableGain - unrecaptured);
 
-  const fedRecaptureTax = unrecaptured * num(R.recapture) / 100;
-  const fedCapGainsTax = capitalGain * cgtRate / 100;
+  /* Unrecaptured §1250 gain is taxed at ordinary rates but capped at 25%. The
+     statutory 25% is a ceiling, not a flat rate: an investor whose marginal
+     rate is below it pays the lower figure. */
+  const fedRecaptureTax = useBrackets
+    ? Math.min(marginalTax(T.fedOrdinary, magiBase, unrecaptured), unrecaptured * num(R.recapture) / 100)
+    : unrecaptured * num(R.recapture) / 100;
+
+  /* Long-term gain stacks above ordinary income AND above the recapture, which
+     has already filled part of the ordinary band, so a modest earner with a
+     large gain pays across the 0/15/20 bands rather than all of it at 20%. */
+  const fedCapGainsTax = useBrackets
+    ? longTermGainTax(T.fedLTCG, magiBase + unrecaptured, capitalGain)
+    : capitalGain * cgtRate / 100;
 
   const niitOnSale = R.niitEnabled
     ? niitTax(taxableGain, num(PR.otherMAGI), PR.filingStatus, num(R.niit))
     : { base: 0, tax: 0, threshold: NIIT_THRESHOLDS[PR.filingStatus] || NIIT_THRESHOLDS.single };
 
-  const stateGainTax = taxableGain * num(R.stateCapGains) / 100;
-  const cityGainRate = PR.nycResident === false ? 0 : num(R.cityCapGains);
-  const cityGainTax = taxableGain * cityGainRate / 100;
+  /* New York has no preferential rate for capital gains: the whole gain is
+     ordinary income, so it runs through the ordinary schedule stacked on the
+     investor's other income. */
+  const stateGainTax = useBrackets
+    ? marginalTax(T.state, magiBase, taxableGain)
+    : taxableGain * num(R.stateCapGains) / 100;
+  const cityGainRate = isNycResident ? num(R.cityCapGains) : 0;
+  const cityGainTax = !isNycResident ? 0
+    : useBrackets ? marginalTax(T.city, magiBase, taxableGain)
+    : taxableGain * cityGainRate / 100;
 
   const totalSaleTax = fedRecaptureTax + fedCapGainsTax + niitOnSale.tax + stateGainTax + cityGainTax;
 
@@ -2279,10 +2417,12 @@ function computeModel(S) {
   // They are a separate ordinary-rate item — they do not net against the gain
   // before the capital-gain and recapture rates are applied.
   const releasedLosses = PR.fullDisposition !== false ? suspended : 0;
-  const releasedLossTaxBenefit = releasedLosses * ordinaryRate / 100;
+  // A deduction, so the benefit is the tax it removes: pass it as a negative
+  // amount and flip the sign.
+  const releasedLossTaxBenefit = -ordinaryTaxOn(-releasedLosses);
 
   // A loss on the sale of business/investment realty is an ordinary §1231 loss.
-  const lossTaxBenefit = lossOnSale * ordinaryRate / 100;
+  const lossTaxBenefit = -ordinaryTaxOn(-lossOnSale);
 
   const loanPayoff = hold.loanBalanceAtSale;
   const grossProceeds = amountRealized - loanPayoff;
@@ -2298,6 +2438,10 @@ function computeModel(S) {
     fedRecaptureTax, fedCapGainsTax,
     niitTax: niitOnSale.tax, niitBase: niitOnSale.base, niitThreshold: niitOnSale.threshold,
     stateGainTax, cityGainTax, cityGainRate, totalSaleTax,
+    effectiveRecaptureRate: unrecaptured > 0 ? fedRecaptureTax / unrecaptured * 100 : 0,
+    effectiveCapGainsRate: capitalGain > 0 ? fedCapGainsTax / capitalGain * 100 : 0,
+    effectiveStateRate: taxableGain > 0 ? stateGainTax / taxableGain * 100 : 0,
+    effectiveCityRate: taxableGain > 0 ? cityGainTax / taxableGain * 100 : 0,
     releasedLosses, releasedLossTaxBenefit,
     loanPayoff, grossProceeds, netProceeds,
     effectiveGainRate: taxableGain > 0 ? totalSaleTax / taxableGain * 100 : 0,
@@ -2362,7 +2506,10 @@ function computeModel(S) {
     deferredRecapture: unrecaptured,
   };
 
-  return { purchase, hold, sale, returns, exchange, meta: { ordinaryRate, cgtRate, depLife } };
+  return {
+    purchase, hold, sale, returns, exchange,
+    meta: { ordinaryRate, cgtRate, depLife, taxYear: TAX_YEAR, useBrackets },
+  };
 }
 
 /**
@@ -2395,17 +2542,39 @@ function computeVariant(S, patch) {
  *
  * VERIFICATION STATUS
  * -------------------
- * Each preset carries a `status` field:
- *   'verified'      New York rules, checked line by line against the official
+ * Each preset carries a `status` field. The wording is deliberately narrow,
+ * because a claim of verification is only worth what was actually done:
+ *
+ *   'checked'       New York. Every rate was compared against the published
  *                   sources listed in `sources` on the date in `verified`.
- *   'experimental'  Non-US jurisdictions. Researched, but NOT independently
- *                   verified, and in several cases the engine cannot express
- *                   the local rule at all (see `omissions`). Treat these as a
- *                   starting point for your own numbers, not as an answer.
+ *                   That is a documentary check, not professional review. The
+ *                   `verification` field records, per group of rates, whether
+ *                   the figure came from a primary government source or from
+ *                   corroborating secondary sources.
+ *   'experimental'  Non-US jurisdictions. Researched, but NOT checked against
+ *                   primary sources, and in several cases the engine cannot
+ *                   express the local rule at all (see `omissions`). A starting
+ *                   point for your own numbers, not an answer.
  *   'blank'         Empty template for a jurisdiction you enter yourself.
  *
- * No preset in this file has been reviewed by a CPA, an attorney or a tax
- * adviser. Every rate is editable in the application.
+ * NO PRESET IN THIS FILE HAS BEEN REVIEWED BY A CPA, AN ATTORNEY, AN ENROLLED
+ * AGENT OR ANY OTHER TAX PROFESSIONAL, and none of it is advice. Every rate is
+ * editable in the application.
+ *
+ * Documentary check performed 2026-08-22. What it found and fixed:
+ *   - The 0.25% additional base tax on high-value conveyances applies in New
+ *     York City ONLY. The outside-NYC preset had been applying it, overstating
+ *     the transfer tax on a $3.5M sale upstate by $8,750. Corrected.
+ *   - Income tax was a single flat rate per jurisdiction. Replaced with the
+ *     real 2026 marginal schedules; see taxTables.js.
+ *   - The §469(i) $25,000 allowance was missing entirely. Implemented.
+ * Confirmed correct as they stood: the NYS 0.4% base transfer tax; the combined
+ * NYC mansion schedule from 1% to 3.9%; NYC RPTT at 1%/1.425% residential and
+ * 1.425%/2.625% commercial across the $500,000 threshold; mortgage recording
+ * tax at 1.80%/1.925% residential and 2.55% commercial net of the lender's
+ * 0.25%; the 25% ceiling on unrecaptured §1250 gain; NIIT at 3.8% with
+ * thresholds of $200,000, $250,000 and $125,000; and 27.5 and 39-year recovery
+ * periods.
  */
 
 const L_US = {
@@ -2482,13 +2651,13 @@ const PRESETS = {
   coopMarket: true,
   lossRule: false,
   label: 'New York State (outside NYC)', region: 'United States',
-  notes: 'NYS transfer tax and the 1% state mansion tax apply; no city RPTT or NYC income tax. Mortgage recording tax varies by county — 1.0% is typical outside the MTA region; check your county.',
+  notes: 'The 0.4% NYS transfer tax and the 1% state mansion tax apply; no city RPTT and no NYC income tax. The additional 0.25% base tax on high-value conveyances is New York City only and is therefore NOT applied here — outside the city the rate stays 0.4% at every price. Mortgage recording tax varies by county; 1.0% is typical outside the MTA region, so check your county.',
   sample: { price: 550000, rentMo: 3400, propTaxYr: 9000, insuranceYr: 1800, hoaMo: 0, otherOpexYr: 1200, capexTotal: 20000, loanRate: 6.75, downPct: 25 },
   labels: L_US,
   rates: mk({
     marginalBrackets: false,
-    stateTransferRes: [{ min: 0, rate: 0.4 }, { min: 3000000, rate: 0.65 }],
-    stateTransferComm: [{ min: 0, rate: 0.4 }, { min: 2000000, rate: 0.65 }],
+    stateTransferRes: [{ min: 0, rate: 0.4 }],
+    stateTransferComm: [{ min: 0, rate: 0.4 }],
     mansion: [{ min: 0, rate: 0 }, { min: 1000000, rate: 1.0 }],
     mrtResidential: flat(1.0), mrtCommercial: 1.0, coopExemptFromMRT: true,
     fedLTCG: 20, recapture: 25, niit: 3.8, niitEnabled: true,
@@ -2860,9 +3029,15 @@ const PRESETS = {
 
 const VERIFICATION = {
   'us-nyc': {
-    status: 'verified',
+    status: 'checked',
     taxYear: 2026,
-    verified: '2026-08-21',
+    verified: '2026-08-22',
+    verification: {
+      transferAndTransactionTaxes: 'primary',
+      federalIncomeAndGains: 'primary',
+      newYorkIncomeBrackets: 'secondary',
+      professionalReview: 'none',
+    },
     sources: [
       { label: 'NYS Tax Dept — Real estate transfer tax', url: 'https://www.tax.ny.gov/bus/transfer/rptidx.htm' },
       { label: 'NYS Tax Dept — Additional (mansion) tax on residential conveyances', url: 'https://www.tax.ny.gov/bus/transfer/rptmansion.htm' },
@@ -2889,9 +3064,15 @@ const VERIFICATION = {
     ]
   },
   'us-nys': {
-    status: 'verified',
+    status: 'checked',
     taxYear: 2026,
-    verified: '2026-08-21',
+    verified: '2026-08-22',
+    verification: {
+      transferAndTransactionTaxes: 'primary',
+      federalIncomeAndGains: 'primary',
+      newYorkIncomeBrackets: 'secondary',
+      professionalReview: 'none',
+    },
     sources: [
       { label: 'NYS Tax Dept — Real estate transfer tax', url: 'https://www.tax.ny.gov/bus/transfer/rptidx.htm' },
       { label: 'NYS Tax Dept — Additional (mansion) tax', url: 'https://www.tax.ny.gov/bus/transfer/rptmansion.htm' },
@@ -2973,6 +3154,8 @@ function defaultState() {
       capexYear: 1,
       capexMonth: 7,
       niitOnRental: true,
+      rateMode: 'brackets',
+      activeParticipation: true,
     },
     purchase: {
       price: 950000,
@@ -3586,7 +3769,7 @@ function buildPresetSelect() {
     const group = el('optgroup', { label: region });
     for (const [key, p] of Object.entries(PRESETS)) {
       if (p.region !== region) continue;
-      const suffix = p.status === 'verified' ? '' : p.status === 'blank' ? ' (blank template)' : ' (experimental)';
+      const suffix = p.status === 'checked' ? '' : p.status === 'blank' ? ' (blank template)' : ' (experimental)';
       group.appendChild(el('option', { value: key, text: p.label + suffix }));
     }
     if (group.childElementCount) sel.appendChild(group);
@@ -3822,8 +4005,8 @@ function renderPropertyStep() {
   const preset = PRESETS[S.meta.preset] || PRESETS['us-nyc'];
   const line = $('#presetStatusLine');
   clear(line);
-  const badgeClass = preset.status === 'verified' ? 'verified' : preset.status === 'blank' ? 'blank' : 'experimental';
-  const badgeText = preset.status === 'verified' ? 'Verified New York rules'
+  const badgeClass = preset.status === 'checked' ? 'verified' : preset.status === 'blank' ? 'blank' : 'experimental';
+  const badgeText = preset.status === 'checked' ? `Rates checked ${preset.verified}`
     : preset.status === 'blank' ? 'Blank template' : 'Experimental preset';
   line.appendChild(el('span', { class: `badge ${badgeClass}`, text: badgeText }));
   line.appendChild(document.createTextNode(' '));
@@ -4013,15 +4196,33 @@ function syncDynamic(root) {
 function renderSources(preset) {
   const sb = $('#sourcesBlock');
   clear(sb);
-  const badgeClass = preset.status === 'verified' ? 'verified' : preset.status === 'blank' ? 'blank' : 'experimental';
+  const badgeClass = preset.status === 'checked' ? 'verified' : preset.status === 'blank' ? 'blank' : 'experimental';
   sb.appendChild(el('p', {}, [
     el('span', {
       class: `badge ${badgeClass}`,
-      text: preset.status === 'verified' ? 'Verified' : preset.status === 'blank' ? 'Blank template' : 'Experimental',
+      text: preset.status === 'checked' ? 'Rates checked' : preset.status === 'blank' ? 'Blank template' : 'Experimental',
     }),
     ` ${preset.label} · tax year ${preset.taxYear} · rates checked ${preset.verified}`,
   ]));
   if (preset.notes) sb.appendChild(el('p', { class: 'help', text: preset.notes }));
+
+  if (preset.verification) {
+    const v = preset.verification;
+    const box = el('div', { class: 'callout info' });
+    box.appendChild(el('h4', { text: 'What "checked" means here' }));
+    box.appendChild(el('p', {
+      text: 'Every rate below was compared against the published sources on '
+        + preset.verified + '. That is a documentary check, not professional review.',
+    }));
+    const ul = el('ul');
+    const label = { primary: 'read from the government source itself', secondary: 'from corroborating secondary sources', provisional: 'provisional', none: 'none' };
+    ul.appendChild(el('li', { text: `Transfer, mansion, RPTT and mortgage recording taxes — ${label[v.transferAndTransactionTaxes] || v.transferAndTransactionTaxes}` }));
+    ul.appendChild(el('li', { text: `Federal rates, thresholds and §469 rules — ${label[v.federalIncomeAndGains] || v.federalIncomeAndGains}` }));
+    ul.appendChild(el('li', { text: `New York State and City bracket thresholds — ${label[v.newYorkIncomeBrackets] || v.newYorkIncomeBrackets}` }));
+    ul.appendChild(el('li', { text: 'Review by a CPA, attorney or enrolled agent — none' }));
+    box.appendChild(ul);
+    sb.appendChild(box);
+  }
 
   if ((preset.sources || []).length) {
     sb.appendChild(el('h4', { text: 'Official sources' }));
@@ -4241,9 +4442,13 @@ function renderResultsStep() {
     `cap rate on cost= year 1 NOI ÷ cost basis     = ${money(h.year1.noi)} ÷ ${money(p.costBasis)} = ${pct(rt.capRateOnCost)}`,
     `cash-on-cash    = year 1 pre-tax cash flow ÷ cash invested = ${money(h.year1.preTaxCF)} ÷ ${money(p.cashAtClosing)} = ${pct(rt.cashOnCash)}`,
     '',
-    `Income tax on the rental uses a combined ordinary rate of ${pct(h.ordinaryRate)}`,
-    `  = federal ${pct(num(S.rates.fedOrdinary))} + state ${pct(num(S.rates.stateOrdinary))} + city ${pct(h.cityOrdinaryRate)}`,
-    S.profile.nycResident ? '' : '  (city rate is zero because you are not a New York City resident)',
+    h.useBrackets
+      ? `Income tax on the rental is the tax this property ADDS to your bill: your other income of ${money(num(S.profile.otherMAGI))} is the base, and the rental result stacks on top of it through the federal, New York State and New York City schedules. That works out to ${pct(h.ordinaryRate)} on the next dollar — not the ${pct(h.flatOrdinaryRate)} top-of-scale figure.`
+      : `Flat-rate mode: a combined ordinary rate of ${pct(h.flatOrdinaryRate)} = federal ${pct(num(S.rates.fedOrdinary))} + state ${pct(num(S.rates.stateOrdinary))} + city ${pct(h.cityOrdinaryRate)}.`,
+    S.profile.nycResident ? '' : '  (no city tax: you are not a New York City resident)',
+    h.allowanceCap > 0
+      ? `§469(i) special allowance available this year: ${money(h.allowanceCap)}. Rental losses up to that amount are deductible now rather than suspended.`
+      : '',
   ]);
 
   // ---- chart ----
@@ -4277,6 +4482,8 @@ function renderResultsStep() {
     { label: 'Remaining balance deducted at sale', value: money(h.unamortisedFinancingAtSale) },
     { kind: 'group', label: 'Passive losses' },
     { label: S.hold.passiveAllowed ? 'Losses deducted as they arise' : 'Losses suspended under §469' , value: S.hold.passiveAllowed ? 'Yes' : 'Yes' },
+    { label: '§469(i) allowance available each year', value: money(h.allowanceCap) },
+    { label: 'Losses deducted now under that allowance', value: money(h.allowanceUsedTotal), cls: h.allowanceUsedTotal ? 'pos' : '' },
     { label: 'Suspended losses carried to the sale', value: money(h.suspendedAtSale) },
     { label: 'Released on a fully taxable disposition', value: money(s.releasedLosses) },
     { label: 'Tax benefit at your ordinary rate', value: money(s.releasedLossTaxBenefit), cls: 'pos', kind: 'total' },
@@ -4345,11 +4552,11 @@ function renderResultsStep() {
 
   // ---- sale tax ----
   renderTable($('#saleTaxTable'), 'Tax on the sale, by component', [
-    { label: `Depreciation recapture (§1250) — ${money(s.unrecaptured)} at ${pct(num(S.rates.recapture))}`, value: money(s.fedRecaptureTax) },
-    { label: `Federal capital gains — ${money(s.capitalGain)} at ${pct(results.meta.cgtRate)}`, value: money(s.fedCapGainsTax) },
+    { label: `Depreciation recapture (§1250) — ${money(s.unrecaptured)} at ${pct(s.effectiveRecaptureRate)}`, value: money(s.fedRecaptureTax) },
+    { label: `Federal capital gains — ${money(s.capitalGain)} at ${pct(s.effectiveCapGainsRate)}`, value: money(s.fedCapGainsTax) },
     { label: `Net investment income tax — ${money(s.niitBase)} at ${pct(num(S.rates.niit))}`, value: money(s.niitTax) },
-    { label: `New York State — ${money(s.taxableGain)} at ${pct(num(S.rates.stateCapGains))}`, value: money(s.stateGainTax) },
-    { label: `New York City — ${money(s.taxableGain)} at ${pct(s.cityGainRate)}`, value: money(s.cityGainTax) },
+    { label: `New York State — ${money(s.taxableGain)} at ${pct(s.effectiveStateRate)}`, value: money(s.stateGainTax) },
+    { label: `New York City — ${money(s.taxableGain)} at ${pct(s.effectiveCityRate)}`, value: money(s.cityGainTax) },
     { label: 'Total tax on the sale', value: money(s.totalSaleTax), kind: 'total' },
     { label: 'Effective rate on the gain', value: pct(s.effectiveGainRate), kind: 'sub' },
     { kind: 'group', label: 'Separately, at your ordinary rate' },
@@ -4368,7 +4575,11 @@ function renderResultsStep() {
       ? `New York City tax applies at ${pct(s.cityGainRate)} because you are a city resident.`
       : 'New York City tax is zero because you are not a city resident. New York State tax still applies to New York-source gain.',
     '',
-    `Each tax has its own base. Recapture is taxed at ${pct(num(S.rates.recapture))} on ${money(s.unrecaptured)} only; the ${pct(results.meta.cgtRate)} long-term rate applies only to the ${money(s.capitalGain)} above it. New York taxes the whole gain at one rate because it has no preferential capital gains rate.`,
+    `Each tax has its own base. Recapture applies to ${money(s.unrecaptured)} only; the long-term rate applies only to the ${money(s.capitalGain)} above it. New York has no preferential capital gains rate, so the whole gain runs through its ordinary schedule.`,
+    '',
+    h.useBrackets
+      ? `Rates are worked out from your income, not from a single top rate. Your other income of ${money(num(S.profile.otherMAGI))} is the starting point; this property's income and gain stack on top of it and run through the ${results.meta.taxYear || 2026} schedules. Unrecaptured §1250 gain is taxed at ordinary rates capped at 25% — the cap is a ceiling, not a flat rate, so ${pct(s.effectiveRecaptureRate)} is what actually applies here.`
+      : `Flat-rate mode: one marginal rate is applied to everything, using the rates you entered. This overstates the tax for anyone below the top bracket.`,
   ]);
 
   // ---- returns ----
@@ -4563,8 +4774,8 @@ function renderReportStep() {
 
   const statusBox = el('p', {}, [
     el('span', {
-      class: `badge ${preset.status === 'verified' ? 'verified' : preset.status === 'blank' ? 'blank' : 'experimental'}`,
-      text: preset.status === 'verified' ? 'Verified New York rules' : preset.status === 'blank' ? 'Blank template' : 'Experimental preset — unverified',
+      class: `badge ${preset.status === 'checked' ? 'verified' : preset.status === 'blank' ? 'blank' : 'experimental'}`,
+      text: preset.status === 'checked' ? `Rates checked ${preset.verified}` : preset.status === 'blank' ? 'Blank template' : 'Experimental preset — unverified',
     }),
   ]);
   root.appendChild(statusBox);
@@ -4690,7 +4901,7 @@ function renderReportStep() {
   section('Limitations', limNode);
 
   const disc = el('div', { class: 'disclaimer' });
-  disc.appendChild(el('p', { text: 'This is planning software, not tax-preparation software. It produces an estimate from the assumptions entered above, using published statutory rates. It has not been reviewed or validated by a certified public accountant, an attorney, an enrolled agent or any other tax professional, and no such review is claimed.' }));
+  disc.appendChild(el('p', { text: 'This is planning software, not tax-preparation software. It produces an estimate from the assumptions entered above, using published statutory rates. Those rates were compared against the government sources listed above on ' + (preset.verified || 'the date shown') + '; that is a documentary check only. It has not been reviewed or validated by a certified public accountant, an attorney, an enrolled agent or any other tax professional, and no such review is claimed.' }));
   disc.appendChild(el('p', { text: 'Real transactions turn on facts this model does not capture: your full bracket structure, other income and losses, state residency and sourcing, entity structure, withholding obligations, elections and deadlines. Nothing here is tax, legal or investment advice. Confirm every figure with a qualified adviser before acting on it.' }));
   disc.appendChild(el('p', { text: 'All figures are computed in your browser. No input is transmitted, logged or stored anywhere outside this device.' }));
   section('Disclaimer', disc);
