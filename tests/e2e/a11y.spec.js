@@ -23,7 +23,7 @@ test.describe('accessibility', () => {
   test('axe finds no violations in dark theme with professional mode on', async ({ page }) => {
     await openApp(page);
     await page.getByRole('button', { name: 'Toggle dark theme' }).click();
-    await page.getByRole('button', { name: 'Professional' }).click();
+    await page.locator('#modePro').click();
     for (const key of STEPS) {
       await step(page, key).click();
       const r = await scan(page);
@@ -106,13 +106,13 @@ test.describe('accessibility', () => {
 
   test('status messages reach a live region', async ({ page }) => {
     await openApp(page);
-    await page.getByRole('button', { name: 'Professional' }).click();
+    await page.locator('#modePro').click();
     await expect(page.locator('#liveStatus')).toContainText('Professional mode', { timeout: 3000 });
   });
 
   test('every form control has an accessible name', async ({ page }) => {
     await openApp(page);
-    await page.getByRole('button', { name: 'Professional' }).click();
+    await page.locator('#modePro').click();
     for (const key of ['property', 'financing', 'operations', 'profile', 'sale']) {
       await step(page, key).click();
       const unnamed = await page.locator('section.panel:not([hidden]) input, section.panel:not([hidden]) select')

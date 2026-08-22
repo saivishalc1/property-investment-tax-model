@@ -53,7 +53,7 @@ test.describe('responsive layout', () => {
   test('wide tables scroll inside their own container', async ({ page }) => {
     await page.setViewportSize({ width: 360, height: 780 });
     await openApp(page);
-    await page.getByRole('button', { name: 'Professional' }).click();
+    await page.locator('#modePro').click();
     await step(page, 'results').click();
     const scroller = page.locator('#yearlyTable').locator('xpath=ancestor::div[contains(@class,"table-scroll")]');
     const canScroll = await scroller.evaluate((n) => n.scrollWidth > n.clientWidth);

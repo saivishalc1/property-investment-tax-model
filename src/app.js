@@ -8,10 +8,10 @@
  * static SVG strings built entirely from numbers.
  */
 
-import { computeModel, computeVariant, num } from './calculations.js?v=72f6b7654f';
-import { PRESETS, REGIONS } from './presets.js?v=72f6b7654f';
-import { validate } from './validation.js?v=72f6b7654f';
-import * as store from './storage.js?v=72f6b7654f';
+import { computeModel, computeVariant, num } from './calculations.js?v=d2b8de4d2e';
+import { PRESETS, REGIONS } from './presets.js?v=d2b8de4d2e';
+import { validate } from './validation.js?v=d2b8de4d2e';
+import * as store from './storage.js?v=d2b8de4d2e';
 
 /* ================================================================== *
  * DOM helpers
@@ -1402,12 +1402,48 @@ function goTo(step, moveFocus = true) {
   // the address bar is still honoured as a deep link on first load.
 }
 
+/** Per-step wording for what Quick estimate is standing in for. */
+const QUICK_NOTES = {
+  property: 'closing costs and who pays the transfer tax',
+  financing: 'interest-only periods and origination points',
+  operations: 'other income, expense inflation and improvement timing',
+  profile: 'the passive-loss election and the full rate engine',
+  sale: 'selling costs and who pays the transfer tax on the sale',
+};
+
 function applyModeVisibility() {
   const pro = S.meta.mode === 'pro';
   $$('[data-mode="pro"]').forEach((n) => { n.hidden = !pro; });
   $$('[data-mode="quick"]').forEach((n) => { n.hidden = pro; });
   $('#modeQuick').setAttribute('aria-pressed', String(!pro));
   $('#modePro').setAttribute('aria-pressed', String(pro));
+
+  // A mode switch that changes nothing visible reads as a broken button. Each
+  // step says what Quick estimate is deciding on the user's behalf, and how
+  // many settings that covers, so the toggle always has a visible effect.
+  for (const [step, what] of Object.entries(QUICK_NOTES)) {
+    const note = $(`#modeNote-${step}`);
+    if (!note) continue;
+    const panel = $(`#panel-${step}`);
+    const count = panel.querySelectorAll('[data-mode="pro"] input, [data-mode="pro"] select').length;
+    clear(note);
+    note.appendChild(el('strong', { text: 'Quick estimate' }));
+    note.appendChild(document.createTextNode(
+      ` is using standard values for ${what}${count ? ` — ${count} setting${count === 1 ? '' : 's'}` : ''}. Switch to `));
+    // Distinct accessible name: "Professional" alone would collide with the
+    // header toggle for anyone navigating by control name.
+    const link = el('button', {
+      type: 'button', class: 'linklike', text: 'Professional',
+      'aria-label': 'Switch to Professional mode',
+    });
+    link.addEventListener('click', () => {
+      S.meta.mode = 'pro';
+      onChange();
+      announce('Professional mode. All settings and the full rate engine are visible.');
+    });
+    note.appendChild(link);
+    note.appendChild(document.createTextNode(' to see and change them.'));
+  }
 }
 
 /* ================================================================== *

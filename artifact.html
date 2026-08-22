@@ -164,6 +164,12 @@
 /* ---------- base ---------- */
 *, *::before, *::after { box-sizing: border-box; }
 
+/* The hidden attribute only sets `display: none` at user-agent strength, so any
+   class that sets display — .field is display:grid, for one — silently defeats
+   it. Without this, [hidden] elements stayed on screen: the co-op flip tax, the
+   sale-price override, and every field the mode toggle was meant to hide. */
+[hidden] { display: none !important; }
+
 html { -webkit-text-size-adjust: 100%; }
 
 body {
@@ -839,6 +845,29 @@ dialog::backdrop { background: rgba(10, 12, 16, .55); }
    user can scroll them (WCAG 2.1.1). They carry tabindex="0" in the markup. */
 .table-scroll:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 
+/* ---------- mode note ---------- */
+/* Sits at the foot of each input step in Quick estimate, so switching modes is
+   never a button that appears to do nothing. */
+.mode-note {
+  margin: 0;
+  padding: var(--sp3) var(--sp4);
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: var(--step-1);
+}
+.mode-note strong { color: var(--text); font-weight: 600; }
+.linklike {
+  /* Inline in a sentence, but still a control: WCAG 2.5.8 wants at least
+     24px of target in both directions. */
+  display: inline-block; min-height: 24px; padding: 3px 0; line-height: 18px;
+  background: none; border: 0;
+  color: var(--accent); font: inherit; font-weight: 600;
+  text-decoration: underline; text-underline-offset: 2px; cursor: pointer;
+}
+.linklike:hover { color: var(--accent-hover); }
+
 </style>
 
 
@@ -949,7 +978,7 @@ dialog::backdrop { background: rgba(10, 12, 16, .55); }
         </div>
       </div>
 
-      <div class="card">
+      <div class="card" data-mode="pro" hidden
         <h3>Closing costs you pay as buyer</h3>
         <p class="card-hint">Acquisition costs are added to your cost basis, which lowers the taxable gain when you sell. Loan costs are treated separately.</p>
 
@@ -1008,6 +1037,7 @@ dialog::backdrop { background: rgba(10, 12, 16, .55); }
         <details class="how"><summary>How calculated</summary><div class="formula" id="buyTaxFormula"></div></details>
       </div>
 
+      <p class="mode-note" data-mode="quick" id="modeNote-property"></p>
       <div class="step-actions no-print">
         <span></span>
         <button type="button" class="btn btn-primary" data-goto="financing">Next: Financing</button>
@@ -1053,7 +1083,7 @@ dialog::backdrop { background: rgba(10, 12, 16, .55); }
               </div>
               <p class="field-error" id="f-loanTermYrs-err"></p>
             </div>
-            <div class="field">
+            <div class="field" data-mode="pro" hidden>
               <div class="field-label">
                 <label for="f-ioYears">Interest-only period</label>
                 <span class="tip">
@@ -1070,7 +1100,7 @@ dialog::backdrop { background: rgba(10, 12, 16, .55); }
           </div>
         </div>
 
-        <div class="field">
+        <div class="field" data-mode="pro" hidden>
           <label for="f-pointsPct">Origination points</label>
           <div class="control">
             <input type="number" id="f-pointsPct" data-bind="purchase.pointsPct" step="0.25" min="0" inputmode="decimal" aria-describedby="f-pointsPct-help f-pointsPct-err">
@@ -1087,6 +1117,7 @@ dialog::backdrop { background: rgba(10, 12, 16, .55); }
         <details class="how"><summary>How calculated</summary><div class="formula" id="financeFormula"></div></details>
       </div>
 
+      <p class="mode-note" data-mode="quick" id="modeNote-financing"></p>
       <div class="step-actions no-print">
         <button type="button" class="btn" data-goto="property">Back</button>
         <button type="button" class="btn btn-primary" data-goto="operations">Next: Rental operations</button>
@@ -1124,7 +1155,7 @@ dialog::backdrop { background: rgba(10, 12, 16, .55); }
             </div>
           </div>
           <div>
-            <div class="field">
+            <div class="field" data-mode="pro" hidden>
               <label for="f-otherIncomeYr">Other income a year</label>
               <div class="control">
                 <span class="affix prefix" data-currency>$</span>
@@ -1192,7 +1223,7 @@ dialog::backdrop { background: rgba(10, 12, 16, .55); }
               </div>
               <p class="field-error" id="f-mgmtPct-err"></p>
             </div>
-            <div class="field">
+            <div class="field" data-mode="pro" hidden>
               <label for="f-opexGrowthPct">Expense inflation a year</label>
               <div class="control">
                 <input type="number" id="f-opexGrowthPct" data-bind="hold.opexGrowthPct" step="0.25" inputmode="decimal" aria-describedby="f-opexGrowthPct-err">
@@ -1264,7 +1295,7 @@ dialog::backdrop { background: rgba(10, 12, 16, .55); }
               </div>
               <p class="field-error" id="f-capexTotal-err"></p>
             </div>
-            <div class="field">
+            <div class="field" data-mode="pro" hidden>
               <label for="f-capexYear">Year the work is completed</label>
               <div class="control">
                 <input type="number" id="f-capexYear" data-bind="profile.capexYear" step="1" min="1" inputmode="numeric" aria-describedby="f-capexYear-err">
@@ -1305,6 +1336,7 @@ dialog::backdrop { background: rgba(10, 12, 16, .55); }
         <details class="how"><summary>How calculated</summary><div class="formula" id="opsFormula"></div></details>
       </div>
 
+      <p class="mode-note" data-mode="quick" id="modeNote-operations"></p>
       <div class="step-actions no-print">
         <button type="button" class="btn" data-goto="financing">Back</button>
         <button type="button" class="btn btn-primary" data-goto="profile">Next: Your tax profile</button>
@@ -1358,7 +1390,7 @@ dialog::backdrop { background: rgba(10, 12, 16, .55); }
           </div>
         </div>
 
-        <div class="field">
+        <div class="field" data-mode="pro" hidden>
           <div class="switch-row">
             <span class="switch-text">
               <label for="f-passiveAllowed">Deduct rental losses in the year they arise</label>
@@ -1439,6 +1471,7 @@ dialog::backdrop { background: rgba(10, 12, 16, .55); }
         <div id="sourcesBlock"></div>
       </div>
 
+      <p class="mode-note" data-mode="quick" id="modeNote-profile"></p>
       <div class="step-actions no-print">
         <button type="button" class="btn" data-goto="operations">Back</button>
         <button type="button" class="btn btn-primary" data-goto="sale">Next: Sale assumptions</button>
@@ -1487,7 +1520,7 @@ dialog::backdrop { background: rgba(10, 12, 16, .55); }
               </div>
               <p class="field-error" id="f-brokerPct-err"></p>
             </div>
-            <div class="field">
+            <div class="field" data-mode="pro" hidden>
               <label for="f-sellLegal">Legal and closing</label>
               <div class="control">
                 <span class="affix prefix" data-currency>$</span>
@@ -1505,7 +1538,7 @@ dialog::backdrop { background: rgba(10, 12, 16, .55); }
               </div>
               <p class="field-error" id="f-flipTaxPct-err"></p>
             </div>
-            <div class="field">
+            <div class="field" data-mode="pro" hidden>
               <label for="f-otherSell">Other selling costs</label>
               <div class="control">
                 <span class="affix prefix" data-currency>$</span>
@@ -1516,7 +1549,7 @@ dialog::backdrop { background: rgba(10, 12, 16, .55); }
           </div>
         </div>
 
-        <fieldset>
+        <fieldset data-mode="pro" hidden
           <legend>Who pays the transfer tax on the sale?</legend>
           <div class="radio-row">
             <label><input type="radio" name="sellTransfer" value="seller" data-bind-radio="sale.transferTaxPayer"> You, the seller (standard in New York)</label>
@@ -1540,6 +1573,7 @@ dialog::backdrop { background: rgba(10, 12, 16, .55); }
         </details>
       </div>
 
+      <p class="mode-note" data-mode="quick" id="modeNote-sale"></p>
       <div class="step-actions no-print">
         <button type="button" class="btn" data-goto="profile">Back</button>
         <button type="button" class="btn btn-primary" data-goto="results">See results</button>
@@ -4791,12 +4825,48 @@ function goTo(step, moveFocus = true) {
   // the address bar is still honoured as a deep link on first load.
 }
 
+/** Per-step wording for what Quick estimate is standing in for. */
+const QUICK_NOTES = {
+  property: 'closing costs and who pays the transfer tax',
+  financing: 'interest-only periods and origination points',
+  operations: 'other income, expense inflation and improvement timing',
+  profile: 'the passive-loss election and the full rate engine',
+  sale: 'selling costs and who pays the transfer tax on the sale',
+};
+
 function applyModeVisibility() {
   const pro = S.meta.mode === 'pro';
   $$('[data-mode="pro"]').forEach((n) => { n.hidden = !pro; });
   $$('[data-mode="quick"]').forEach((n) => { n.hidden = pro; });
   $('#modeQuick').setAttribute('aria-pressed', String(!pro));
   $('#modePro').setAttribute('aria-pressed', String(pro));
+
+  // A mode switch that changes nothing visible reads as a broken button. Each
+  // step says what Quick estimate is deciding on the user's behalf, and how
+  // many settings that covers, so the toggle always has a visible effect.
+  for (const [step, what] of Object.entries(QUICK_NOTES)) {
+    const note = $(`#modeNote-${step}`);
+    if (!note) continue;
+    const panel = $(`#panel-${step}`);
+    const count = panel.querySelectorAll('[data-mode="pro"] input, [data-mode="pro"] select').length;
+    clear(note);
+    note.appendChild(el('strong', { text: 'Quick estimate' }));
+    note.appendChild(document.createTextNode(
+      ` is using standard values for ${what}${count ? ` — ${count} setting${count === 1 ? '' : 's'}` : ''}. Switch to `));
+    // Distinct accessible name: "Professional" alone would collide with the
+    // header toggle for anyone navigating by control name.
+    const link = el('button', {
+      type: 'button', class: 'linklike', text: 'Professional',
+      'aria-label': 'Switch to Professional mode',
+    });
+    link.addEventListener('click', () => {
+      S.meta.mode = 'pro';
+      onChange();
+      announce('Professional mode. All settings and the full rate engine are visible.');
+    });
+    note.appendChild(link);
+    note.appendChild(document.createTextNode(' to see and change them.'));
+  }
 }
 
 /* ================================================================== *

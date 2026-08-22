@@ -23,7 +23,7 @@
 <link rel="icon" href="./assets/favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="./assets/icon-180.png">
 <link rel="manifest" href="./assets/site.webmanifest">
-<link rel="stylesheet" href="./src/styles.css?v=72f6b7654f">
+<link rel="stylesheet" href="./src/styles.css?v=d2b8de4d2e">
 </head>
 <body>
 
@@ -134,7 +134,7 @@
         </div>
       </div>
 
-      <div class="card">
+      <div class="card" data-mode="pro" hidden
         <h3>Closing costs you pay as buyer</h3>
         <p class="card-hint">Acquisition costs are added to your cost basis, which lowers the taxable gain when you sell. Loan costs are treated separately.</p>
 
@@ -193,6 +193,7 @@
         <details class="how"><summary>How calculated</summary><div class="formula" id="buyTaxFormula"></div></details>
       </div>
 
+      <p class="mode-note" data-mode="quick" id="modeNote-property"></p>
       <div class="step-actions no-print">
         <span></span>
         <button type="button" class="btn btn-primary" data-goto="financing">Next: Financing</button>
@@ -238,7 +239,7 @@
               </div>
               <p class="field-error" id="f-loanTermYrs-err"></p>
             </div>
-            <div class="field">
+            <div class="field" data-mode="pro" hidden>
               <div class="field-label">
                 <label for="f-ioYears">Interest-only period</label>
                 <span class="tip">
@@ -255,7 +256,7 @@
           </div>
         </div>
 
-        <div class="field">
+        <div class="field" data-mode="pro" hidden>
           <label for="f-pointsPct">Origination points</label>
           <div class="control">
             <input type="number" id="f-pointsPct" data-bind="purchase.pointsPct" step="0.25" min="0" inputmode="decimal" aria-describedby="f-pointsPct-help f-pointsPct-err">
@@ -272,6 +273,7 @@
         <details class="how"><summary>How calculated</summary><div class="formula" id="financeFormula"></div></details>
       </div>
 
+      <p class="mode-note" data-mode="quick" id="modeNote-financing"></p>
       <div class="step-actions no-print">
         <button type="button" class="btn" data-goto="property">Back</button>
         <button type="button" class="btn btn-primary" data-goto="operations">Next: Rental operations</button>
@@ -309,7 +311,7 @@
             </div>
           </div>
           <div>
-            <div class="field">
+            <div class="field" data-mode="pro" hidden>
               <label for="f-otherIncomeYr">Other income a year</label>
               <div class="control">
                 <span class="affix prefix" data-currency>$</span>
@@ -377,7 +379,7 @@
               </div>
               <p class="field-error" id="f-mgmtPct-err"></p>
             </div>
-            <div class="field">
+            <div class="field" data-mode="pro" hidden>
               <label for="f-opexGrowthPct">Expense inflation a year</label>
               <div class="control">
                 <input type="number" id="f-opexGrowthPct" data-bind="hold.opexGrowthPct" step="0.25" inputmode="decimal" aria-describedby="f-opexGrowthPct-err">
@@ -449,7 +451,7 @@
               </div>
               <p class="field-error" id="f-capexTotal-err"></p>
             </div>
-            <div class="field">
+            <div class="field" data-mode="pro" hidden>
               <label for="f-capexYear">Year the work is completed</label>
               <div class="control">
                 <input type="number" id="f-capexYear" data-bind="profile.capexYear" step="1" min="1" inputmode="numeric" aria-describedby="f-capexYear-err">
@@ -490,6 +492,7 @@
         <details class="how"><summary>How calculated</summary><div class="formula" id="opsFormula"></div></details>
       </div>
 
+      <p class="mode-note" data-mode="quick" id="modeNote-operations"></p>
       <div class="step-actions no-print">
         <button type="button" class="btn" data-goto="financing">Back</button>
         <button type="button" class="btn btn-primary" data-goto="profile">Next: Your tax profile</button>
@@ -543,7 +546,7 @@
           </div>
         </div>
 
-        <div class="field">
+        <div class="field" data-mode="pro" hidden>
           <div class="switch-row">
             <span class="switch-text">
               <label for="f-passiveAllowed">Deduct rental losses in the year they arise</label>
@@ -624,6 +627,7 @@
         <div id="sourcesBlock"></div>
       </div>
 
+      <p class="mode-note" data-mode="quick" id="modeNote-profile"></p>
       <div class="step-actions no-print">
         <button type="button" class="btn" data-goto="operations">Back</button>
         <button type="button" class="btn btn-primary" data-goto="sale">Next: Sale assumptions</button>
@@ -672,7 +676,7 @@
               </div>
               <p class="field-error" id="f-brokerPct-err"></p>
             </div>
-            <div class="field">
+            <div class="field" data-mode="pro" hidden>
               <label for="f-sellLegal">Legal and closing</label>
               <div class="control">
                 <span class="affix prefix" data-currency>$</span>
@@ -690,7 +694,7 @@
               </div>
               <p class="field-error" id="f-flipTaxPct-err"></p>
             </div>
-            <div class="field">
+            <div class="field" data-mode="pro" hidden>
               <label for="f-otherSell">Other selling costs</label>
               <div class="control">
                 <span class="affix prefix" data-currency>$</span>
@@ -701,7 +705,7 @@
           </div>
         </div>
 
-        <fieldset>
+        <fieldset data-mode="pro" hidden
           <legend>Who pays the transfer tax on the sale?</legend>
           <div class="radio-row">
             <label><input type="radio" name="sellTransfer" value="seller" data-bind-radio="sale.transferTaxPayer"> You, the seller (standard in New York)</label>
@@ -725,6 +729,7 @@
         </details>
       </div>
 
+      <p class="mode-note" data-mode="quick" id="modeNote-sale"></p>
       <div class="step-actions no-print">
         <button type="button" class="btn" data-goto="profile">Back</button>
         <button type="button" class="btn btn-primary" data-goto="results">See results</button>
@@ -934,6 +939,6 @@
   </div>
 </noscript>
 
-<script type="module" src="./src/app.js?v=72f6b7654f"></script>
+<script type="module" src="./src/app.js?v=d2b8de4d2e"></script>
 </body>
 </html>

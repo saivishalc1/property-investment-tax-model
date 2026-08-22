@@ -78,10 +78,10 @@ test.describe('core flow', () => {
 
   test('professional mode reveals advanced settings, quick mode hides them', async ({ page }) => {
     await openApp(page);
-    await page.getByRole('button', { name: 'Professional' }).click();
+    await page.locator('#modePro').click();
     await step(page, 'profile').click();
     await expect(page.getByRole('heading', { name: 'Tax rates used' })).toBeVisible();
-    await page.getByRole('button', { name: 'Quick estimate' }).click();
+    await page.locator('#modeQuick').click();
     await expect(page.getByRole('heading', { name: 'Tax rates used' })).toBeHidden();
   });
 

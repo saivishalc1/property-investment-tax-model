@@ -89,7 +89,7 @@ test.describe('deployment shape', () => {
   test('no console errors anywhere in the app', async ({ page }) => {
     const errors = trackConsole(page);
     await openApp(page);
-    await page.getByRole('button', { name: 'Professional' }).click();
+    await page.locator('#modePro').click();
     for (const label of ['property', 'financing', 'operations', 'profile',
       'sale', 'results', 'compare', 'report']) {
       await step(page, label).click();

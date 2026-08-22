@@ -162,6 +162,12 @@
 /* ---------- base ---------- */
 *, *::before, *::after { box-sizing: border-box; }
 
+/* The hidden attribute only sets `display: none` at user-agent strength, so any
+   class that sets display — .field is display:grid, for one — silently defeats
+   it. Without this, [hidden] elements stayed on screen: the co-op flip tax, the
+   sale-price override, and every field the mode toggle was meant to hide. */
+[hidden] { display: none !important; }
+
 html { -webkit-text-size-adjust: 100%; }
 
 body {
@@ -836,3 +842,26 @@ dialog::backdrop { background: rgba(10, 12, 16, .55); }
 /* Scrollable table containers must be reachable by keyboard so a keyboard-only
    user can scroll them (WCAG 2.1.1). They carry tabindex="0" in the markup. */
 .table-scroll:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+
+/* ---------- mode note ---------- */
+/* Sits at the foot of each input step in Quick estimate, so switching modes is
+   never a button that appears to do nothing. */
+.mode-note {
+  margin: 0;
+  padding: var(--sp3) var(--sp4);
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: var(--step-1);
+}
+.mode-note strong { color: var(--text); font-weight: 600; }
+.linklike {
+  /* Inline in a sentence, but still a control: WCAG 2.5.8 wants at least
+     24px of target in both directions. */
+  display: inline-block; min-height: 24px; padding: 3px 0; line-height: 18px;
+  background: none; border: 0;
+  color: var(--accent); font: inherit; font-weight: 600;
+  text-decoration: underline; text-underline-offset: 2px; cursor: pointer;
+}
+.linklike:hover { color: var(--accent-hover); }
