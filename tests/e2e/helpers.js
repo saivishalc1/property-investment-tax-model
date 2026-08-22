@@ -40,3 +40,14 @@ export async function results(page) {
     };
   });
 }
+
+/**
+ * Locate a step button by the step it navigates to.
+ *
+ * Deliberately not by accessible name: a step button's name changes as its
+ * state changes (a completed step announces itself as completed), and a test
+ * that breaks when a label gains a word is testing the label, not the app.
+ */
+export function step(page, key) {
+  return page.locator(`#stepList button[data-step="${key}"]`);
+}

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { openApp, trackConsole } from './helpers.js';
+import { openApp, trackConsole, step } from './helpers.js';
 
 const WIDTHS = [320, 360, 414, 768, 1024, 1280, 1440, 1920];
 
@@ -8,8 +8,8 @@ test.describe('responsive layout', () => {
     test(`no horizontal overflow at ${width}px`, async ({ page }) => {
       await page.setViewportSize({ width, height: 900 });
       await openApp(page);
-      for (const label of ['1 Property', '3 Rental operations', '6 Results', '7 Comparisons', '8 Report']) {
-        await page.getByRole('button', { name: label }).click();
+      for (const label of ['property', 'operations', 'results', 'compare', 'report']) {
+        await step(page, label).click();
         const overflow = await page.evaluate(() => ({
           doc: document.documentElement.scrollWidth - document.documentElement.clientWidth,
           body: document.body.scrollWidth - document.body.clientWidth,
@@ -54,7 +54,7 @@ test.describe('responsive layout', () => {
     await page.setViewportSize({ width: 360, height: 780 });
     await openApp(page);
     await page.getByRole('button', { name: 'Professional' }).click();
-    await page.getByRole('button', { name: '6 Results' }).click();
+    await step(page, 'results').click();
     const scroller = page.locator('#yearlyTable').locator('xpath=ancestor::div[contains(@class,"table-scroll")]');
     const canScroll = await scroller.evaluate((n) => n.scrollWidth > n.clientWidth);
     expect(canScroll).toBe(true);

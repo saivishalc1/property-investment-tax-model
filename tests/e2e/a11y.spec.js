@@ -1,17 +1,8 @@
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
-import { openApp } from './helpers.js';
+import { openApp, step } from './helpers.js';
 
-const STEPS = [
-  ['property', '1 Property'],
-  ['financing', '2 Financing'],
-  ['operations', '3 Rental operations'],
-  ['profile', '4 Your tax profile'],
-  ['sale', '5 Sale assumptions'],
-  ['results', '6 Results'],
-  ['compare', '7 Comparisons'],
-  ['report', '8 Report'],
-];
+const STEPS = ['property', 'financing', 'operations', 'profile', 'sale', 'results', 'compare', 'report'];
 
 async function scan(page) {
   return new AxeBuilder({ page })
@@ -20,10 +11,10 @@ async function scan(page) {
 }
 
 test.describe('accessibility', () => {
-  for (const [step, label] of STEPS) {
-    test(`axe finds no violations on the ${step} step (light)`, async ({ page }) => {
+  for (const key of STEPS) {
+    test(`axe finds no violations on the ${key} step (light)`, async ({ page }) => {
       await openApp(page);
-      await page.getByRole('button', { name: label }).click();
+      await step(page, key).click();
       const r = await scan(page);
       expect(r.violations.map((v) => `${v.id}: ${v.nodes.length} node(s)`)).toEqual([]);
     });
@@ -33,10 +24,10 @@ test.describe('accessibility', () => {
     await openApp(page);
     await page.getByRole('button', { name: 'Toggle dark theme' }).click();
     await page.getByRole('button', { name: 'Professional' }).click();
-    for (const [, label] of STEPS) {
-      await page.getByRole('button', { name: label }).click();
+    for (const key of STEPS) {
+      await step(page, key).click();
       const r = await scan(page);
-      expect(r.violations.map((v) => v.id), `violations on ${label}`).toEqual([]);
+      expect(r.violations.map((v) => v.id), `violations on ${key}`).toEqual([]);
     }
   });
 
@@ -110,7 +101,7 @@ test.describe('accessibility', () => {
   test('step navigation exposes the current step to assistive technology', async ({ page }) => {
     await openApp(page);
     await expect(page.locator('#stepList button[aria-current="step"]')).toHaveText(/Property/);
-    await page.getByRole('button', { name: '6 Results' }).click();
+    await step(page, 'results').click();
     await expect(page.locator('#stepList button[aria-current="step"]')).toHaveText(/Results/);
     await expect(page.locator('#stepList button[aria-current="step"]')).toHaveCount(1);
   });
@@ -124,21 +115,21 @@ test.describe('accessibility', () => {
   test('every form control has an accessible name', async ({ page }) => {
     await openApp(page);
     await page.getByRole('button', { name: 'Professional' }).click();
-    for (const [, label] of [['', '1 Property'], ['', '2 Financing'], ['', '3 Rental operations'], ['', '4 Your tax profile'], ['', '5 Sale assumptions']]) {
-      await page.getByRole('button', { name: label }).click();
+    for (const key of ['property', 'financing', 'operations', 'profile', 'sale']) {
+      await step(page, key).click();
       const unnamed = await page.locator('section.panel:not([hidden]) input, section.panel:not([hidden]) select')
         .evaluateAll((nodes) => nodes.filter((n) => {
           if (n.type === 'file' || n.offsetParent === null) return false;
           const byLabel = n.labels && n.labels.length > 0;
           return !(byLabel || n.getAttribute('aria-label') || n.getAttribute('aria-labelledby'));
         }).map((n) => n.id || n.outerHTML.slice(0, 80)));
-      expect(unnamed, `unnamed controls on ${label}`).toEqual([]);
+      expect(unnamed, `unnamed controls on ${key}`).toEqual([]);
     }
   });
 
   test('charts have a text alternative and a data table', async ({ page }) => {
     await openApp(page);
-    await page.getByRole('button', { name: '6 Results' }).click();
+    await step(page, 'results').click();
     const svg = page.locator('#cfChart svg');
     await expect(svg).toHaveAttribute('role', 'img');
     const label = await svg.getAttribute('aria-label');
@@ -150,7 +141,7 @@ test.describe('accessibility', () => {
 
   test('data tables have captions and scoped headers', async ({ page }) => {
     await openApp(page);
-    await page.getByRole('button', { name: '6 Results' }).click();
+    await step(page, 'results').click();
     const tables = page.locator('#panel-results table');
     const n = await tables.count();
     expect(n).toBeGreaterThan(4);
@@ -164,7 +155,7 @@ test.describe('accessibility', () => {
 
   test('information is never carried by colour alone', async ({ page }) => {
     await openApp(page);
-    await page.getByRole('button', { name: '6 Results' }).click();
+    await step(page, 'results').click();
     // Negative values are marked with a minus sign, not only a red class.
     const negatives = await page.locator('#panel-results td.neg').allTextContents();
     expect(negatives.length).toBeGreaterThan(0);

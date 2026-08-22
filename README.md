@@ -59,6 +59,7 @@ a current browser — Chrome, Edge, Firefox or Safari from 2023 onward, for
 | `npm run serve` | Serves the site at `http://localhost:4173`. |
 | `npm run serve:subpath` | Serves it at `http://localhost:4174/property-investment-tax-model/`, reproducing the GitHub Pages project subpath. |
 | `npm run build` | Produces `dist/` and fails the build on a broken reference, a root-absolute path, a possible secret or any network call in the shipped code. |
+| `npm run bundle` | Produces `artifact.html`, a single self-contained file with the modules concatenated and the typefaces embedded, for hosts that want one file rather than ES modules. |
 | `npm test` | Unit tests for the calculation engine, validation and storage (Node's built-in test runner — no test framework dependency). |
 | `npm run test:e2e` | Playwright: user flow, scenario persistence, accessibility (axe-core), responsive layout and deployment shape. |
 | `npm run check` | Build followed by the unit tests. |
@@ -99,10 +100,25 @@ disclaimer. Navigation and editing controls are excluded from print.
 import from JSON. A versioned autosave restores your last session, and older
 files are migrated forward rather than rejected.
 
-**Themes and layout.** Light and dark, with the choice remembered. Layouts hold
-from 320px to large desktops with no horizontal page overflow; a persistent
-results rail on desktop and a compact results dock on mobile keep the headline
-numbers visible while you edit.
+**Themes and layout.** Light and dark, with the choice remembered, and the
+system preference honoured on first load. Layouts hold from 320px to large
+desktops with no horizontal page overflow; a persistent results rail on desktop
+and a compact results dock on mobile keep the headline numbers visible while
+you edit.
+
+**Design.** One accent — a deep navy ink, chosen to read as institutional
+rather than as interface blue — over cool paper neutrals biased slightly toward
+it. Semantic gain/loss/caution colours are deliberately unrelated to the accent,
+so "this is a link" and "this number is negative" can never be confused.
+Headings are set in Source Serif 4 because this is a tax document more than it
+is an app; every control, label and figure is IBM Plex Sans, whose numerals line
+up honestly in a column. **Both typefaces are self-hosted** (variable, latin
+subset, ~96 kB together, licences in `assets/fonts/`) rather than loaded from a
+font CDN — the page's promise that it makes no external request of any kind is
+worth more than the bytes saved. Results lead with a four-figure headline band
+(cash to close, after-tax cash flow, total profit, after-tax IRR); everything
+else is sized to read as supporting evidence. The step rail marks steps you have
+completed, and announces that state in words rather than by colour alone.
 
 **Accessibility.** Targets WCAG 2.2 AA — semantic landmarks, a skip link, full
 keyboard operation, visible focus, explicit labels, an error summary that links
@@ -341,8 +357,10 @@ src/
   validation.js         field errors and scenario warnings
   styles.css            design tokens, layout, print stylesheet
 assets/                 favicon, icons, web manifest
+  fonts/                self-hosted variable typefaces and their licences
 tools/
   build.js              dist/ build plus reference, secret and subpath checks
+  bundle.js             single-file build (modules inlined, fonts embedded)
   serve.js              static server, optionally under a base path
 tests/
   unit/                 node:test suites for the engine, validation, storage
@@ -399,10 +417,19 @@ PLAYWRIGHT_CHROMIUM_PATH=/path/to/chrome npx playwright test
 
 ## Deployment
 
-The site is deployed to GitHub Pages by `.github/workflows/pages.yml`, which
-runs the build, the unit tests and the full Playwright suite first and refuses
-to publish if any of them fail. It uploads `dist/`, which includes a
-`.nojekyll` marker so that Jekyll does not rewrite the tree.
+`.github/workflows/pages.yml` runs the build, the unit tests and the full
+Playwright suite, and refuses to publish if any of them fail. It uploads
+`dist/`, which includes a `.nojekyll` marker so Jekyll does not rewrite the
+tree.
+
+> **Note on the live deployment.** The public site is currently served by
+> GitHub Pages *branch deployment* (`main` / root) rather than by that workflow.
+> The repository was bootstrapped through the GitHub web interface, and the
+> token an Actions run uses is not permitted to create files under
+> `.github/workflows/`, so `pages.yml` could not be pushed from CI. It remains
+> in the repository history, and pushing it from a user account works normally —
+> that restriction applies only to workflow tokens. Nothing about the site
+> depends on which of the two methods publishes it.
 
 To deploy from a fresh clone:
 

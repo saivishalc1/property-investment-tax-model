@@ -83,6 +83,9 @@ let S = store.defaultState();
 let results = null;
 let currentErrors = [];
 let currentStep = 'property';
+// Steps the user has actually opened. A tick means "you have been here and it
+// holds up", never "we filled this in for you".
+const visitedSteps = new Set(['property']);
 
 const STEPS = ['property', 'financing', 'operations', 'profile', 'sale', 'results', 'compare', 'report'];
 const STEP_OF_PATH = {
@@ -227,9 +230,30 @@ function renderValidation() {
   warnings.forEach((w) => wlist.appendChild(el('li', { text: w })));
   wbox.hidden = warnings.length === 0;
 
-  // Mark step buttons that contain an error.
+  // Mark step buttons that contain an error, and tick the ones already cleared.
   const bad = new Set(errors.map((e) => stepForPath(e.path)));
-  $$('#stepList button').forEach((b) => b.classList.toggle('has-error', bad.has(b.dataset.step)));
+  $$('#stepList button').forEach((b) => {
+    const step = b.dataset.step;
+    const hasError = bad.has(step);
+    const isDone = !hasError && step !== currentStep && visitedSteps.has(step);
+    b.classList.toggle('has-error', hasError);
+    b.classList.toggle('is-done', isDone);
+
+    // The tick and the warning glyph are drawn in CSS, which keeps them out of
+    // the accessible name. State is conveyed to assistive technology here
+    // instead, as a real word rather than a symbol.
+    let status = b.querySelector('.step-status');
+    const text = hasError ? ' (needs attention)' : isDone ? ' (completed)' : '';
+    if (!text) {
+      if (status) status.remove();
+    } else {
+      if (!status) {
+        status = el('span', { class: 'step-status visually-hidden' });
+        b.appendChild(status);
+      }
+      status.textContent = text;
+    }
+  });
 
   return errors.length === 0;
 }
@@ -655,19 +679,32 @@ function renderResultsStep() {
   $('#resultsIntro').textContent =
     `${preset.label} · ${propTypeLabel()} · ${money(p.price)} purchase · ${h.years}-year hold · sale at ${money(s.salePrice)}.`;
 
-  // ---- KPI grid ----
+  // ---- headline band: the four figures that decide whether to go further ----
+  const headline = [
+    { k: 'Cash to close', v: money(p.cashAtClosing), sub: `${pct(100 - p.ltv, 0)} down plus closing costs` },
+    { k: 'After-tax cash flow', v: money(h.year1.afterTaxCF), sub: 'Year 1, after income tax', cls: signClass(h.year1.afterTaxCF) },
+    { k: 'Total profit', v: money(rt.totalProfit), sub: `Over ${h.years} years, after all tax`, cls: signClass(rt.totalProfit) },
+    { k: 'After-tax IRR', v: rt.irr === null ? 'n/a' : pct(rt.irr * 100), sub: rt.preTaxIrr === null ? 'Annualised return' : `Pre-tax ${pct(rt.preTaxIrr * 100)}`, cls: rt.irr === null ? '' : signClass(rt.irr) },
+  ];
+  const hero = $('#kpiHero');
+  clear(hero);
+  headline.forEach((k) => {
+    hero.appendChild(el('div', { class: 'kpi-cell' }, [
+      el('span', { class: 'k', text: k.k }),
+      el('strong', { class: `v ${k.cls || ''}`, text: k.v }),
+      el('span', { class: 'sub', text: k.sub }),
+    ]));
+  });
+
+  // ---- supporting figures ----
   const kpis = [
-    { k: 'Cash required to close', v: money(p.cashAtClosing), sub: `${pct(100 - p.ltv, 0)} down plus closing costs` },
     { k: 'Net operating income (year 1)', v: money(h.year1.noi), sub: 'Before mortgage and tax' },
     { k: 'Cap rate', v: pct(rt.capRate), sub: 'Year 1 NOI ÷ purchase price' },
     { k: 'Cash-on-cash return', v: pct(rt.cashOnCash), sub: 'Year 1 pre-tax cash flow ÷ cash invested', cls: signClass(rt.cashOnCash) },
-    { k: 'After-tax cash flow (year 1)', v: money(h.year1.afterTaxCF), sub: 'After income tax on the rental', cls: signClass(h.year1.afterTaxCF) },
     { k: 'Sale price', v: money(s.salePrice), sub: s.usedOverride ? 'You entered this figure' : `Projected at ${pct(num(S.hold.apprPct))} a year` },
     { k: 'Tax on the sale', v: money(s.totalSaleTax), sub: `Effective ${pct(s.effectiveGainRate)} of the gain` },
     { k: 'Net sale proceeds', v: money(s.netProceeds), sub: 'After loan payoff, costs and tax', cls: signClass(s.netProceeds) },
-    { k: 'Total profit', v: money(rt.totalProfit), sub: 'Cash flow plus proceeds, less cash invested', cls: signClass(rt.totalProfit) },
     { k: 'Return on investment', v: pct(rt.roi, 1), sub: `${pct(rt.annualisedRoi, 1)} a year compounded`, cls: signClass(rt.roi) },
-    { k: 'After-tax IRR', v: rt.irr === null ? 'n/a' : pct(rt.irr * 100), sub: rt.preTaxIrr === null ? 'Annualised' : `Pre-tax ${pct(rt.preTaxIrr * 100)}`, cls: rt.irr === null ? '' : signClass(rt.irr) },
     { k: 'Equity multiple', v: rt.equityMultiple.toFixed(2) + '×', sub: 'Total cash returned ÷ cash invested' },
   ];
   const grid = $('#kpiGrid');
@@ -1294,11 +1331,13 @@ function renderAll() {
 function goTo(step, moveFocus = true) {
   if (!STEPS.includes(step)) step = 'property';
   currentStep = step;
+  visitedSteps.add(step);
   STEPS.forEach((s) => { $(`#panel-${s}`).hidden = s !== step; });
   $$('#stepList button').forEach((b) => {
     if (b.dataset.step === step) b.setAttribute('aria-current', 'step');
     else b.removeAttribute('aria-current');
   });
+  renderValidation();
   if (step === 'profile') renderProfileStep();
   if (step === 'compare') renderCompareStep();
   if (step === 'report') { renderCompareStep(); renderReportStep(); }

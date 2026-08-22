@@ -50,6 +50,19 @@ const store = {
 };
 `;
 
+/**
+ * The single-file build has no sibling assets directory, so the two self-hosted
+ * typefaces are embedded as data URIs. If a host's policy refuses data: fonts,
+ * font-display: swap and the fallback stack mean the page simply renders in the
+ * system face rather than breaking.
+ */
+function inlineFonts(css) {
+  return css.replace(/url\("\.\.\/assets\/fonts\/([^"]+)"\)/g, (m, file) => {
+    const bytes = fs.readFileSync(path.join(root, 'assets', 'fonts', file));
+    return `url("data:font/woff2;base64,${bytes.toString('base64')}")`;
+  });
+}
+
 const html = read('index.html');
 const bodyStart = html.indexOf('<body>') + '<body>'.length;
 const bodyEnd = html.indexOf('<script type="module"');
@@ -57,7 +70,7 @@ let body = html.slice(bodyStart, bodyEnd);
 
 // The bundle is served from a single file, so the module <script> and the
 // stylesheet <link> are replaced by inline blocks.
-const css = read('src/styles.css');
+const css = inlineFonts(read('src/styles.css'));
 const title = 'Property Investment Tax Model';
 
 const out = `<title>${title}</title>

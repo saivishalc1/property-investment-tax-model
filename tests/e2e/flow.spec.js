@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { openApp, trackConsole, results } from './helpers.js';
+import { openApp, trackConsole, results, step } from './helpers.js';
 
 test.describe('core flow', () => {
   test('welcome screen offers all four entry points', async ({ page }) => {
@@ -80,7 +80,7 @@ test.describe('core flow', () => {
   test('professional mode reveals advanced settings, quick mode hides them', async ({ page }) => {
     await openApp(page);
     await page.getByRole('button', { name: 'Professional' }).click();
-    await page.getByRole('button', { name: '4 Your tax profile' }).click();
+    await step(page, 'profile').click();
     await expect(page.getByRole('heading', { name: 'Tax rates used' })).toBeVisible();
     await page.getByRole('button', { name: 'Quick estimate' }).click();
     await expect(page.getByRole('heading', { name: 'Tax rates used' })).toBeHidden();
@@ -89,7 +89,7 @@ test.describe('core flow', () => {
   test('"How calculated" panels show the real inputs', async ({ page }) => {
     await openApp(page);
     await page.locator('#f-price').fill('1200000');
-    await page.getByRole('button', { name: '6 Results' }).click();
+    await step(page, 'results').click();
     const how = page.locator('#cashFormula');
     await expect(how).toContainText('1,200,000');
     await expect(how).toContainText('cost basis');
@@ -104,9 +104,9 @@ test.describe('core flow', () => {
     await expect(page.locator('#f-price')).toHaveAttribute('aria-invalid', 'true');
     await expect(page.locator('#f-price-err')).toContainText('Purchase price');
 
-    await page.getByRole('button', { name: '2 Financing' }).click();
+    await step(page, 'financing').click();
     await page.locator('#f-loanRate').fill('99');
-    await page.getByRole('button', { name: '1 Property' }).click();
+    await step(page, 'property').click();
     await summary.getByRole('link', { name: /Interest rate/ }).click();
     await expect(page.locator('#panel-financing')).toBeVisible();
     await expect(page.locator('#f-loanRate')).toBeFocused();
@@ -124,7 +124,7 @@ test.describe('core flow', () => {
 
   test('comparison tables render every scenario column', async ({ page }) => {
     await openApp(page);
-    await page.getByRole('button', { name: '7 Comparisons' }).click();
+    await step(page, 'compare').click();
     await expect(page.locator('#holdCompare')).toBeVisible();
     const headers = await page.locator('#holdCompare thead th').allTextContents();
     expect(headers.join(' ')).toContain('5 years');
@@ -141,7 +141,7 @@ test.describe('core flow', () => {
 
   test('the 1031 comparison keeps deferral and passive losses distinct', async ({ page }) => {
     await openApp(page);
-    await page.getByRole('button', { name: '7 Comparisons' }).click();
+    await step(page, 'compare').click();
     const table = page.locator('#exchangeCompare');
     await expect(table).toContainText('Tax paid now');
     await expect(table).toContainText('stay suspended');
@@ -150,7 +150,7 @@ test.describe('core flow', () => {
 
   test('the report contains scenario, sources, limitations and a disclaimer', async ({ page }) => {
     await openApp(page);
-    await page.getByRole('button', { name: '8 Report' }).click();
+    await step(page, 'report').click();
     const report = page.locator('#reportRoot');
     await expect(report).toBeVisible();
     await expect(report).toContainText('New York City');

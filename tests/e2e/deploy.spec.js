@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { openApp, trackConsole } from './helpers.js';
+import { openApp, trackConsole, step } from './helpers.js';
 
 const SUBPATH = 'http://127.0.0.1:4174/property-investment-tax-model/';
 
@@ -8,7 +8,7 @@ test.describe('deployment shape', () => {
     const errors = trackConsole(page);
     await openApp(page, SUBPATH);
     await expect(page.locator('#panel-property')).toBeVisible();
-    await page.getByRole('button', { name: '6 Results' }).click();
+    await step(page, 'results').click();
     await expect(page.locator('#kpiGrid .kpi').first()).toBeVisible();
     expect(errors).toEqual([]);
   });
@@ -20,7 +20,7 @@ test.describe('deployment shape', () => {
       if (url.startsWith('http://127.0.0.1:4174') && r.status() >= 400) bad.push(`${r.status()} ${url}`);
     });
     await openApp(page, SUBPATH);
-    await page.getByRole('button', { name: '8 Report' }).click();
+    await step(page, 'report').click();
     await page.waitForTimeout(300);
     expect(bad).toEqual([]);
   });
@@ -69,8 +69,8 @@ test.describe('deployment shape', () => {
     });
     await openApp(page);
     await page.locator('#f-price').fill('1450000');
-    await page.getByRole('button', { name: '6 Results' }).click();
-    await page.getByRole('button', { name: '7 Comparisons' }).click();
+    await step(page, 'results').click();
+    await step(page, 'compare').click();
     await page.waitForTimeout(500);
     expect(external).toEqual([]);
   });
@@ -90,9 +90,9 @@ test.describe('deployment shape', () => {
     const errors = trackConsole(page);
     await openApp(page);
     await page.getByRole('button', { name: 'Professional' }).click();
-    for (const label of ['1 Property', '2 Financing', '3 Rental operations', '4 Your tax profile',
-      '5 Sale assumptions', '6 Results', '7 Comparisons', '8 Report']) {
-      await page.getByRole('button', { name: label }).click();
+    for (const label of ['property', 'financing', 'operations', 'profile',
+      'sale', 'results', 'compare', 'report']) {
+      await step(page, label).click();
       await page.waitForTimeout(80);
     }
     await page.getByRole('button', { name: 'Toggle dark theme' }).click();
@@ -102,7 +102,7 @@ test.describe('deployment shape', () => {
 
   test('the print stylesheet hides navigation and shows the report', async ({ page }) => {
     await openApp(page);
-    await page.getByRole('button', { name: '8 Report' }).click();
+    await step(page, 'report').click();
     await page.emulateMedia({ media: 'print' });
     const state = await page.evaluate(() => ({
       header: getComputedStyle(document.querySelector('.app-header')).display,
@@ -123,8 +123,8 @@ test.describe('deployment shape', () => {
 
   test('the report still prints when a different step is on screen', async ({ page }) => {
     await openApp(page);
-    await page.getByRole('button', { name: '8 Report' }).click();
-    await page.getByRole('button', { name: '1 Property' }).click();
+    await step(page, 'report').click();
+    await step(page, 'property').click();
     await page.emulateMedia({ media: 'print' });
     const visible = await page.evaluate(() =>
       getComputedStyle(document.querySelector('#panel-report')).display);
