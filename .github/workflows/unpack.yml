@@ -1,0 +1,37 @@
+name: Unpack uploaded archive
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  unpack:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Unpack the archive and restore its history
+        run: |
+          set -euo pipefail
+          git config --global --add safe.directory '*'
+
+          archive=$(ls -1 *.zip 2>/dev/null | head -n 1 || true)
+          if [ -z "$archive" ]; then
+            echo "No archive at the repository root - nothing to unpack."
+            exit 0
+          fi
+          echo "Unpacking $archive"
+          unzip -q "$archive" -d _unpacked
+
+          cd _unpacked/property-investment-tax-model
+          echo "Recovered history:"
+          git log --oneline | head -n 20
+          rm -rf .github/workflows && mkdir -p .github/workflows && cp "$GITHUB_WORKSPACE/.github/workflows/unpack.yml" .github/workflows/unpack.yml && touch .nojekyll && git add -A && git -c user.email=actions@github.com -c user.name=actions commit -qm "Restore the project tree from the uploaded archive"
+
+          git remote set-url origin "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
+          git push --force origin main
