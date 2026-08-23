@@ -13,7 +13,7 @@
 import {
   FEDERAL_ORDINARY, FEDERAL_LTCG, NEW_YORK_STATE, NEW_YORK_CITY,
   SECTION_469_ALLOWANCE, TAX_YEAR,
-} from './taxTables.js?v=f9d715615c';
+} from './taxTables.js?v=f014dfc808';
 
 /** Coerce anything to a finite number; non-numeric input becomes 0. */
 export function num(v) {

@@ -6,7 +6,7 @@
  * and none anywhere else in the application.
  */
 
-import { PRESETS } from './presets.js?v=f9d715615c';
+import { PRESETS } from './presets.js?v=f014dfc808';
 
 export const SCHEMA_VERSION = 3;
 const NS = 'pitm';
