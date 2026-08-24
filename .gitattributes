@@ -1,0 +1,21 @@
+# Normalise line endings so a checkout is byte-identical on every platform.
+#
+# Without this, a Windows checkout with core.autocrlf=true holds CRLF while the
+# repository holds LF. Anything that hashes or diffs the working tree then gets
+# a different answer depending on the operating system — which is exactly how
+# the asset stamp came to differ between a Windows build and the Linux CI
+# runner. Forcing LF in the working tree removes the class of problem rather
+# than papering over one instance of it.
+
+* text=auto eol=lf
+
+# Binary assets must never be touched.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.pdf binary
+*.zip binary

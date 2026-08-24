@@ -44,10 +44,22 @@ const files = walk(srcDir).sort();
 
 const strip = (text) => text.replace(/(\.(?:js|css))\?v=[a-f0-9]+/g, '$1');
 
+/**
+ * Normalise line endings before hashing.
+ *
+ * The repository stores LF, but a Windows checkout with core.autocrlf=true has
+ * CRLF in the working tree. Hashing those bytes makes the stamp depend on which
+ * operating system ran the build: the same commit produced one hash on Windows
+ * and a different one on the Linux CI runner, so CI saw the build modify a
+ * tracked file and failed — correctly. A content hash has to describe the
+ * committed content, not the checkout's line-ending convention.
+ */
+const normalise = (text) => text.replace(/\r\n/g, '\n');
+
 // Hash the stripped contents so the stamp never feeds into its own input.
 const hash = crypto.createHash('sha256');
 for (const f of files) {
-  hash.update(f).update(strip(fs.readFileSync(path.join(srcDir, f), 'utf8')));
+  hash.update(f).update(normalise(strip(fs.readFileSync(path.join(srcDir, f), 'utf8'))));
 }
 const v = hash.digest('hex').slice(0, 10);
 
