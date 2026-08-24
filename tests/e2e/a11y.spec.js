@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
-import { openApp, step } from './helpers.js';
+import { openApp, step, expandResultDetail } from './helpers.js';
 
 const STEPS = ['property', 'financing', 'operations', 'profile', 'sale', 'results', 'compare', 'report'];
 
@@ -144,7 +144,7 @@ test.describe('accessibility', () => {
   test('status messages reach a live region', async ({ page }) => {
     await openApp(page);
     await page.locator('#modePro').click();
-    await expect(page.locator('#liveStatus')).toContainText('Professional mode', { timeout: 3000 });
+    await expect(page.locator('#liveStatus')).toContainText('Detailed view', { timeout: 3000 });
   });
 
   test('every form control has an accessible name', async ({ page }) => {
@@ -165,6 +165,10 @@ test.describe('accessibility', () => {
   test('charts have a text alternative and a data table', async ({ page }) => {
     await openApp(page);
     await step(page, 'results').click();
+    // The chart lives in a supporting section, collapsed in Standard view.
+    // Content inside a closed <details> is not rendered at all, so it is
+    // expanded first — which is what a reader does before reading it.
+    await expandResultDetail(page);
     const svg = page.locator('#cfChart svg');
     await expect(svg).toHaveAttribute('role', 'img');
     const label = await svg.getAttribute('aria-label');

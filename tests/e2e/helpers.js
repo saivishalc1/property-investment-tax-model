@@ -62,3 +62,18 @@ export async function results(page) {
 export function step(page, key) {
   return page.locator(`#stepList button[data-step="${key}"]`);
 }
+
+/**
+ * Expand the supporting detail on Results.
+ *
+ * Those sections are collapsed in Standard view, so their tables are not
+ * rendered at all until opened — which is what a reader does before reading
+ * one. Switching to Detailed opens every section at once, which is the same
+ * thing a reader does when they want all of it.
+ */
+export async function expandResultDetail(page) {
+  await page.locator('#modePro').click();
+  await page.waitForFunction(
+    () => [...document.querySelectorAll('.result-detail')].every((d) => d.open),
+  );
+}

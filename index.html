@@ -23,7 +23,7 @@
 <link rel="icon" href="./assets/favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="./assets/icon-180.png">
 <link rel="manifest" href="./assets/site.webmanifest">
-<link rel="stylesheet" href="./src/styles.css?v=83ab452495">
+<link rel="stylesheet" href="./src/styles.css?v=a7df5c3282">
 </head>
 <body>
 
@@ -880,27 +880,27 @@
       <div class="kpi-grid" id="kpiGrid"></div>
 
       <div class="section-head"><h2>Getting in</h2></div>
-      <div class="card">
-        <h3>Cash required to close</h3>
+      <details class="card result-detail">
+        <summary><h3>Cash required to close</h3></summary>
         <div class="table-scroll" tabindex="0"><table id="cashTable"></table></div>
         <details class="how"><summary>How calculated</summary><div class="formula" id="cashFormula"></div></details>
-      </div>
+      </details>
 
-      <div class="card">
-        <h3>Sources and uses</h3>
+      <details class="card result-detail">
+        <summary><h3>Sources and uses</h3></summary>
         <p class="card-hint">Every dollar going out at closing, and where it comes from. The two sides must balance.</p>
         <div class="table-scroll" tabindex="0"><table id="sourcesUsesTable"></table></div>
-      </div>
+      </details>
 
       <div class="section-head"><h2>While you hold it</h2></div>
-      <div class="card">
-        <h3>Operating results</h3>
+      <details class="card result-detail">
+        <summary><h3>Operating results</h3></summary>
         <div class="table-scroll" tabindex="0"><table id="noiTable"></table></div>
         <details class="how"><summary>How calculated</summary><div class="formula" id="noiFormula"></div></details>
-      </div>
+      </details>
 
-      <div class="card">
-        <h3>Cash flow over the hold</h3>
+      <details class="card result-detail">
+        <summary><h3>Cash flow over the hold</h3></summary>
         <div class="chart-wrap">
           <figure class="figure-flush">
             <div id="cfChart"></div>
@@ -913,34 +913,34 @@
           </div>
         </div>
         <details class="how" id="cfTableDetails"><summary>Show the data as a table</summary><div class="table-scroll" tabindex="0"><table id="cfDataTable"></table></div></details>
-      </div>
+      </details>
 
-      <div class="card">
-        <h3>Depreciation and passive losses</h3>
+      <details class="card result-detail">
+        <summary><h3>Depreciation and passive losses</h3></summary>
         <div class="table-scroll" tabindex="0"><table id="depTable"></table></div>
         <details class="how"><summary>How calculated</summary><div class="formula" id="depFormula"></div></details>
-      </div>
+      </details>
 
       <div class="section-head"><h2>Getting out</h2></div>
-      <div class="card">
-        <h3>The sale</h3>
+      <details class="card result-detail">
+        <summary><h3>The sale</h3></summary>
         <div class="table-scroll" tabindex="0"><table id="saleTable"></table></div>
         <details class="how"><summary>How calculated</summary><div class="formula" id="saleFormula"></div></details>
-      </div>
+      </details>
 
-      <div class="card">
-        <h3>Tax on the sale</h3>
+      <details class="card result-detail">
+        <summary><h3>Tax on the sale</h3></summary>
         <p class="card-hint">Each tax is shown separately because each has a different base and a different rate.</p>
         <div class="table-scroll" tabindex="0"><table id="saleTaxTable"></table></div>
         <details class="how"><summary>How calculated</summary><div class="formula" id="saleTaxFormula"></div></details>
-      </div>
+      </details>
 
       <div class="section-head"><h2>What you end up with</h2></div>
-      <div class="card">
-        <h3>Final returns</h3>
+      <details class="card result-detail">
+        <summary><h3>Final returns</h3></summary>
         <div class="table-scroll" tabindex="0"><table id="returnsTable"></table></div>
         <details class="how"><summary>How calculated</summary><div class="formula" id="returnsFormula"></div></details>
-      </div>
+      </details>
 
       <div class="card" data-mode="pro" hidden>
         <h3>Year-by-year detail</h3>
@@ -1057,6 +1057,6 @@
   </div>
 </noscript>
 
-<script type="module" src="./src/app.js?v=83ab452495"></script>
+<script type="module" src="./src/app.js?v=a7df5c3282"></script>
 </body>
 </html>

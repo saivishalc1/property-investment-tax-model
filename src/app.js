@@ -1747,7 +1747,11 @@ function onChange() {
   // Keep the saved property in step with the scratch autosave, but only once
   // the library is actually in play — a deep link opened before the workspace
   // has initialised must not create a stray record.
-  if (results && !$('#workspace')?.hidden === false) workspace.scheduleSave(S, saveSummary());
+  // Only once an analysis is actually open. `#workspace` hidden means the
+  // analysis view is showing; a deep link that renders before the library has
+  // initialised must not create a stray record.
+  const analysisOpen = $('#workspace')?.hidden === true;
+  if (results && analysisOpen) workspace.scheduleSave(S, saveSummary());
 }
 
 /**
@@ -1778,7 +1782,8 @@ function saveSummary() {
 
 function renderAll() {
   syncInputs();
-  applyModeVisibility();
+  applyModeVisibility(modeJustChanged);
+  modeJustChanged = false;
   renderSummary();
   renderDealStrip();
   renderPropertyStep();
@@ -1833,12 +1838,27 @@ const QUICK_NOTES = {
   sale: 'selling costs and who pays the transfer tax on the sale',
 };
 
-function applyModeVisibility() {
+let modeJustChanged = false;
+
+function applyModeVisibility(force = false) {
   const pro = S.meta.mode === 'pro';
   $$('[data-mode="pro"]').forEach((n) => { n.hidden = !pro; });
   $$('[data-mode="quick"]').forEach((n) => { n.hidden = pro; });
   $('#modeQuick').setAttribute('aria-pressed', String(!pro));
   $('#modePro').setAttribute('aria-pressed', String(pro));
+
+  /*
+   * Supporting detail on Results is collapsed in Standard and open in Detailed.
+   *
+   * Nine tables presented at once is a wall of numbers to read before finding
+   * the one that answers the question. Collapsing them keeps the headline
+   * figures and the decision in view while leaving every number one click
+   * away — the transparency is unchanged, only the order of attention.
+   *
+   * Only forced on a mode change; a section the owner opened by hand stays
+   * open, because reopening it on every keystroke would fight them.
+   */
+  if (force) $$('.result-detail').forEach((d) => { d.open = pro; });
 
   // A mode switch that changes nothing visible reads as a broken button. Each
   // step says what Quick estimate is deciding on the user's behalf, and how
@@ -1896,8 +1916,18 @@ function wire() {
   $$('#stepList button').forEach((b) => b.addEventListener('click', () => goTo(b.dataset.step)));
   $$('[data-goto]').forEach((b) => b.addEventListener('click', () => goTo(b.dataset.goto)));
 
-  $('#modeQuick').addEventListener('click', () => { S.meta.mode = 'quick'; onChange(); announce('Quick estimate mode. Advanced settings are hidden.'); });
-  $('#modePro').addEventListener('click', () => { S.meta.mode = 'pro'; onChange(); announce('Professional mode. All settings and the full rate engine are visible.'); });
+  $('#modeQuick').addEventListener('click', () => {
+    S.meta.mode = 'quick';
+    modeJustChanged = true;
+    onChange();
+    announce('Standard view. Supporting detail is collapsed and advanced settings are hidden.');
+  });
+  $('#modePro').addEventListener('click', () => {
+    S.meta.mode = 'pro';
+    modeJustChanged = true;
+    onChange();
+    announce('Detailed view. Tax assumptions, calculation traces and every schedule are shown.');
+  });
 
   $('#themeBtn').addEventListener('click', () => {
     const next = currentTheme() === 'dark' ? 'light' : 'dark';
@@ -1981,6 +2011,24 @@ function wire() {
       workspace.setCurrentRecord(null);
       openAnalysis(store.nycExampleState(), 'results');
     },
+  });
+
+  /*
+   * A closed disclosure must never hide a table from a printed report.
+   *
+   * CSS cannot force this: a browser does not render the children of a closed
+   * <details> at all, so there is nothing for a print rule to reveal. The
+   * sections are opened before printing and put back afterwards, so the report
+   * is complete without the reader having to remember to expand anything.
+   */
+  let restoreAfterPrint = [];
+  window.addEventListener('beforeprint', () => {
+    restoreAfterPrint = $$('.result-detail').filter((d) => !d.open);
+    restoreAfterPrint.forEach((d) => { d.open = true; });
+  });
+  window.addEventListener('afterprint', () => {
+    restoreAfterPrint.forEach((d) => { d.open = false; });
+    restoreAfterPrint = [];
   });
 
   // keyboard: Escape closes tooltips

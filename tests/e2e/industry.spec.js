@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { openApp, step } from './helpers.js';
+import { openApp, step, expandResultDetail } from './helpers.js';
 
 /**
  * The tool is used by people who read a property the way the industry does.
@@ -47,6 +47,7 @@ test.describe('real estate presentation', () => {
   test('sources and uses balance on the results page', async ({ page }) => {
     await openApp(page);
     await step(page, 'results').click();
+    await expandResultDetail(page);
     const table = page.locator('#sourcesUsesTable');
     await expect(table).toBeVisible();
     await expect(table).toContainText('Total uses');

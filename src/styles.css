@@ -1143,3 +1143,50 @@ dialog::backdrop { background: rgba(10, 12, 16, .55); }
 .shell[hidden] { display: none; }
 
 .workspace-head-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+
+/* ------------------------------------------------------------------ *
+ * Collapsible supporting detail on Results
+ * ------------------------------------------------------------------ *
+ * The heading is the disclosure control, so it must look and behave like a
+ * heading that happens to be clickable — not like a button that happens to
+ * contain a heading.
+ */
+.result-detail > summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+.result-detail > summary::-webkit-details-marker { display: none; }
+
+.result-detail > summary h3 { margin: 0; }
+
+.result-detail > summary::before {
+  content: '▸';
+  color: var(--text-3);
+  font-size: 0.8em;
+  transition: transform 120ms ease;
+}
+.result-detail[open] > summary::before { transform: rotate(90deg); }
+
+@media (prefers-reduced-motion: reduce) {
+  .result-detail > summary::before { transition: none; }
+}
+
+.result-detail > summary:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
+}
+
+@media print {
+  .result-detail > summary::before { display: none; }
+}
+
+/* A negative figure must never break between its sign and its digits. The
+   headline read "−" on one line and "$46,621" on the next, which for a moment
+   looks like a positive number under a stray dash. */
+.kpi-cell .v,
+.kpi .v,
+.summary-list .v,
+.deal-metrics .v { white-space: nowrap; }
