@@ -27,6 +27,16 @@ export function defaultState() {
       name: 'New York City investment property',
       preset: 'us-nyc',
       mode: 'quick',
+      /**
+       * The currency the money figures on screen were last entered under.
+       *
+       * Switching market deliberately does NOT rewrite the user's numbers, so
+       * a price and an income typed in dollars stay as typed when the market
+       * becomes Japan — where they now mean yen, and are wrong by a factor of
+       * roughly a hundred and fifty. Recording the currency lets the model say
+       * so instead of quietly computing on it.
+       */
+      enteredCurrency: 'USD',
       created: new Date().toISOString(),
       updated: new Date().toISOString(),
     },

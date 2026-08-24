@@ -14,6 +14,12 @@ import {
   FEDERAL_ORDINARY, FEDERAL_LTCG, NEW_YORK_STATE, NEW_YORK_CITY,
   SECTION_469_ALLOWANCE, TAX_YEAR,
 } from './taxTables.js';
+import { Money } from './core/money.js';
+import { jurisdictionFor, COVERAGE } from './engine/jurisdiction.js';
+import { computeRentalTax } from './engine/income.js';
+import { computeDisposalTax } from './engine/disposal.js';
+import { computeDepreciation } from './engine/depreciation.js';
+import { weakestStatus, STATUS } from './core/trace.js';
 
 /** Coerce anything to a finite number; non-numeric input becomes 0. */
 export function num(v) {
@@ -287,12 +293,78 @@ export function niitTax(investmentIncome, otherMAGI, filingStatus, ratePct) {
  * @param {object} S scenario state (see storage.js for the schema)
  * @returns {object} results — purchase, hold, sale, returns, exchange
  */
+/**
+ * The rule-engine bridge for one run of the model.
+ *
+ * For a researched market the engine owns every tax figure: it resolves rules
+ * by country, region, date and facts, computes in exact decimal, and returns a
+ * trace naming the source. For an unresearched market it is INACTIVE and the
+ * legacy flat-rate path below still runs — which is why the interface labels
+ * those markets unresearched and refuses to present their figures as checked.
+ *
+ * Money crosses this boundary as a plain number because the surrounding
+ * cash-flow machinery is still float-based. The tax arithmetic itself happens
+ * in exact decimal inside the engine; only the handover is lossy, and it is
+ * lossy at the minor unit rather than through a chain of operations.
+ */
+function engineBridge(S) {
+  const j = jurisdictionFor(S?.meta?.preset);
+
+  /*
+   * "Flat" mode is a deliberate professional override: the user has typed their
+   * own single marginal rate and wants the model to use it. Running the rule
+   * engine anyway would silently discard what they entered, which is worse than
+   * a wrong default — it is a control that does nothing.
+   *
+   * So the engine stands down and the legacy flat-rate path runs. The result is
+   * a USER-SUPPLIED ASSUMPTION rather than a checked calculation, which is one
+   * of the four statuses this product reports, and the interface says so.
+   */
+  const overridden = S?.profile?.rateMode === 'flat';
+  const active = j.coverage === COVERAGE.MODELLED && !overridden;
+  const currency = active ? j.currency : null;
+
+  return {
+    active,
+    overridden,
+    jurisdiction: j,
+    currency,
+    taxDate: new Date().toISOString().slice(0, 10),
+    /*
+     * Acquisition and disposal dates.
+     *
+     * Japan's five-year test is measured at 1 January of the YEAR OF SALE, so
+     * the engine needs real dates rather than a hold length. The scenario does
+     * not yet collect a completion date, so today is used as the acquisition
+     * and the disposal is the hold period after it — an assumption the trace
+     * records rather than hides.
+     */
+    acquisitionDate: new Date().toISOString().slice(0, 10),
+    disposalDate: (years) => {
+      const d = new Date();
+      d.setUTCFullYear(d.getUTCFullYear() + Math.max(1, Math.round(Number(years) || 1)));
+      return d.toISOString().slice(0, 10);
+    },
+    traces: [],
+    statuses: [],
+    // Pass the full value, not a whole-unit rounding of it. Rounding at this
+    // boundary once per year lost about a dollar and a half over a five-year
+    // hold, because each year's cents were discarded before the engine saw
+    // them. String() gives the shortest round-trip form, which Decimal parses
+    // exactly, so the handover loses nothing the float did not already lose.
+    money: (n) => Money.of(String(Number(n) || 0), currency),
+    toNumber: (m) => (m ? m.amount.toNumberLossy() : 0),
+  };
+}
+
 export function computeModel(S) {
   const R = S.rates;
   const P = S.purchase;
   const H = S.hold;
   const SA = S.sale;
   const PR = S.profile;
+
+  const engine = engineBridge(S);
 
   const isComm = P.propType === 'commercial';
   const isCoop = P.propType === 'coop';
@@ -398,9 +470,37 @@ export function computeModel(S) {
   const flatOrdinaryRate = num(R.fedOrdinary) + num(R.stateOrdinary) + cityOrdinaryRate;
   // Reported for display: the marginal rate this investor actually faces on the
   // next dollar of rental income, rather than the top statutory rate.
-  const ordinaryRate = useBrackets
-    ? (magiBase >= 0 ? ordinaryTaxOn(1000) / 1000 * 100 : flatOrdinaryRate)
-    : flatOrdinaryRate;
+  /*
+   * The marginal rate on the next unit of rental income.
+   *
+   * This is a HEADLINE FIGURE — it appears on the deal strip and in the report
+   * — and it was computed from ordinaryTaxOn(), which is the legacy US-only
+   * path. So it read 29.900% for a British property and 29.900% for a Japanese
+   * one, identical because the number was United States federal plus New York
+   * State and had nothing to do with either country.
+   *
+   * Where the engine is active the rate is probed from the engine instead: ask
+   * what one more unit of rental income actually costs under that country's
+   * law. The probe is a thousand units rather than one so a jurisdiction that
+   * rounds its taxable base — Japan truncates to the whole 1,000 yen — does not
+   * round the whole probe away to zero.
+   */
+  const ordinaryRate = (() => {
+    if (!engine.active) {
+      return useBrackets
+        ? (magiBase >= 0 ? ordinaryTaxOn(1000) / 1000 * 100 : flatOrdinaryRate)
+        : flatOrdinaryRate;
+    }
+    const probe = 1000;
+    const at = (extra) => engine.toNumber(computeRentalTax(S, {
+      netOperatingIncome: engine.money(extra),
+      interest: engine.money(0),
+      depreciation: engine.money(0),
+      otherIncome: engine.money(magiBase),
+      on: engine.taxDate,
+    }).tax);
+    return (at(probe) - at(0)) / probe * 100;
+  })();
 
   // §469(i): an actively participating individual may deduct up to $25,000 of
   // rental losses now, phased out between $100,000 and $150,000 of MAGI.
@@ -482,7 +582,37 @@ export function computeModel(S) {
 
     let ordinaryTax = 0;
     let allowanceUsed = 0;
-    if (taxable > 0) {
+    let engineRental = null;
+
+    if (engine.active) {
+      /*
+       * The rule engine owns this figure for a researched market.
+       *
+       * It is given the components rather than a single "taxable" number
+       * because the jurisdictions disagree about what is deductible: the
+       * United Kingdom does not deduct mortgage interest at all and grants a
+       * basic-rate reducer instead, which cannot be reconstructed from a net
+       * figure. Passing the parts is what lets each pack apply its own law.
+       */
+      engineRental = computeRentalTax(S, {
+        netOperatingIncome: engine.money(noi - financingDeduction - usedSuspended),
+        interest: engine.money(sch.interest),
+        depreciation: engine.money(dep),
+        otherIncome: engine.money(magiBase),
+        on: engine.taxDate,
+      });
+      ordinaryTax = engine.toNumber(engineRental.tax);
+      allowanceUsed = engine.toNumber(engineRental.allowanceUsed);
+      const suspendedThisYear = engine.toNumber(engineRental.suspendedLoss);
+      if (suspendedThisYear > 0) {
+        suspended += suspendedThisYear;
+        taxable = 0;
+      } else {
+        taxable = Math.max(0, engine.toNumber(engineRental.taxableProfit));
+      }
+      engine.traces.push(engineRental.trace);
+      engine.statuses.push(engineRental.status);
+    } else if (taxable > 0) {
       ordinaryTax = ordinaryTaxOn(taxable);
     } else if (taxable < 0) {
       if (H.passiveAllowed) {
@@ -498,7 +628,9 @@ export function computeModel(S) {
       }
     }
 
-    // Net rental income is net investment income under §1411.
+    // Net rental income is net investment income under §1411. The engine
+    // reports NIIT only on the disposal, so the holding-period charge still
+    // comes from here for the United States.
     const holdNiit = R.niitEnabled && PR.niitOnRental !== false && taxable > 0
       ? niitTax(taxable, num(PR.otherMAGI), PR.filingStatus, num(R.niit))
       : { base: 0, tax: 0 };
@@ -623,7 +755,58 @@ export function computeModel(S) {
     : useBrackets ? marginalTax(T.city, magiBase, taxableGain)
     : taxableGain * cityGainRate / 100;
 
-  const totalSaleTax = fedRecaptureTax + fedCapGainsTax + niitOnSale.tax + stateGainTax + cityGainTax;
+  /*
+   * The rule engine owns the disposal tax for a researched market.
+   *
+   * This is the figure the original defect was worst in: the legacy path above
+   * charges United States federal capital gains and NEW YORK STATE income tax
+   * on the gain whatever country the property is in, because tablesFor() has no
+   * jurisdiction parameter. The engine resolves by country, applies Japan's
+   * five-year test measured at 1 January of the year of sale, the United
+   * Kingdom's annual exempt amount and 18/24% bands, or the United States split
+   * between capped recapture and stacked long-term gain.
+   */
+  const engineDisposal = engine.active
+    ? computeDisposalTax(S, {
+      gain: engine.money(taxableGain),
+      accumulatedDepreciation: engine.money(accumDep),
+      otherIncome: engine.money(magiBase),
+      suspendedLosses: engine.money(suspended),
+      acquisitionDate: engine.acquisitionDate,
+      disposalDate: engine.disposalDate(years),
+    })
+    : null;
+
+  if (engineDisposal) {
+    engine.traces.push(engineDisposal.trace);
+    engine.statuses.push(engineDisposal.status);
+  }
+
+  /*
+   * When the engine supplies the total, it must also supply the breakdown.
+   *
+   * Taking the total from the engine while leaving the component lines on the
+   * legacy figures produces a statement whose parts do not add up to its own
+   * total — which a reader checking the arithmetic would rightly treat as a
+   * bug in the product.
+   */
+  const engineSlot = (key) => {
+    if (!engineDisposal) return null;
+    const parts = engineDisposal.components.filter((c) => c.key === key);
+    if (!parts.length) return 0;
+    return parts.reduce((a, c) => a + engine.toNumber(c.amount), 0);
+  };
+
+  const saleRecaptureTax = engineDisposal ? engineSlot('recapture') : fedRecaptureTax;
+  const saleCapGainsTax = engineDisposal
+    ? engineSlot('capitalGains') + engineSlot('surtax')
+    : fedCapGainsTax;
+  const saleNiitTax = engineDisposal ? engineSlot('niit') : niitOnSale.tax;
+  const saleStateGainTax = engineDisposal ? engineSlot('state') : stateGainTax;
+  const saleCityGainTax = engineDisposal ? engineSlot('city') : cityGainTax;
+
+  const totalSaleTax = saleRecaptureTax + saleCapGainsTax + saleNiitTax
+    + saleStateGainTax + saleCityGainTax;
 
   // §469(g): on a fully taxable disposition to an unrelated party, suspended
   // passive losses are released and deductible against income of any kind.
@@ -653,13 +836,14 @@ export function computeModel(S) {
     sellingCosts, amountRealized, adjustedBasis, costBasis, capexTotal, accumDep,
     totalGain, taxableGain, lossOnSale, lossTaxBenefit,
     unrecaptured, capitalGain,
-    fedRecaptureTax, fedCapGainsTax,
-    niitTax: niitOnSale.tax, niitBase: niitOnSale.base, niitThreshold: niitOnSale.threshold,
-    stateGainTax, cityGainTax, cityGainRate, totalSaleTax,
-    effectiveRecaptureRate: unrecaptured > 0 ? fedRecaptureTax / unrecaptured * 100 : 0,
-    effectiveCapGainsRate: capitalGain > 0 ? fedCapGainsTax / capitalGain * 100 : 0,
-    effectiveStateRate: taxableGain > 0 ? stateGainTax / taxableGain * 100 : 0,
-    effectiveCityRate: taxableGain > 0 ? cityGainTax / taxableGain * 100 : 0,
+    fedRecaptureTax: saleRecaptureTax, fedCapGainsTax: saleCapGainsTax,
+    niitTax: saleNiitTax, niitBase: niitOnSale.base, niitThreshold: niitOnSale.threshold,
+    stateGainTax: saleStateGainTax, cityGainTax: saleCityGainTax, cityGainRate, totalSaleTax,
+    engineComponents: engineDisposal ? engineDisposal.components : null,
+    effectiveRecaptureRate: unrecaptured > 0 ? saleRecaptureTax / unrecaptured * 100 : 0,
+    effectiveCapGainsRate: capitalGain > 0 ? saleCapGainsTax / capitalGain * 100 : 0,
+    effectiveStateRate: taxableGain > 0 ? saleStateGainTax / taxableGain * 100 : 0,
+    effectiveCityRate: taxableGain > 0 ? saleCityGainTax / taxableGain * 100 : 0,
     releasedLosses, releasedLossTaxBenefit,
     loanPayoff, grossProceeds, netProceeds,
     effectiveGainRate: taxableGain > 0 ? totalSaleTax / taxableGain * 100 : 0,
@@ -759,7 +943,25 @@ export function computeModel(S) {
 
   return {
     purchase, hold, sale, returns, exchange, sourcesAndUses,
-    meta: { ordinaryRate, cgtRate, depLife, taxYear: TAX_YEAR, useBrackets },
+    meta: {
+      ordinaryRate, cgtRate, depLife, taxYear: TAX_YEAR, useBrackets,
+      /*
+       * Where the tax figures above actually came from.
+       *
+       * `engine: true` means every tax number was resolved from the versioned
+       * rule packs by country, region, date and facts. `false` means this is a
+       * market with no researched pack and the legacy flat-rate path ran, which
+       * is why the interface labels it unresearched.
+       */
+      engine: engine.active,
+      /** True when the user overrode the rules with their own flat rate. */
+      ratesOverridden: engine.overridden,
+      jurisdiction: engine.jurisdiction,
+      engineStatus: engine.overridden
+        ? STATUS.ASSUMPTION
+        : (engine.statuses.length ? weakestStatus(engine.statuses) : STATUS.UNSUPPORTED),
+      engineTraces: engine.traces,
+    },
   };
 }
 

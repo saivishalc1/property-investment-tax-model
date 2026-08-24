@@ -199,14 +199,26 @@ describe('NIIT thresholds are not indexed and the base is the lesser figure', ()
 });
 
 describe('The 2026 gap is reported, not papered over', () => {
-  test('the 2025 capital gains rule does not apply to a 2026 disposal', () => {
-    const { rules, unsupported } = registry.resolveAll({
+  test('a 2026 disposal gets an ESTIMATED table, never the 2025 one relabelled', () => {
+    const { rules } = registry.resolveAll({
       country: 'US', category: CATEGORY.CAPITAL_GAINS_TAX, on: '2026-06-01',
       facts: { ownership: OWNERSHIP.INDIVIDUAL, filingStatus: 'single' },
     });
-    // Only the section 1250 ceiling, which has no end date, remains in force.
-    assert.ok(!rules.some((r) => r.id.includes('ltcg')), 'the 2025 LTCG table has expired');
-    assert.equal(unsupported, null);
+    const ltcg = rules.find((r) => r.id.includes('ltcg'));
+    assert.ok(ltcg, 'a 2026 disposal can be priced');
+    assert.equal(ltcg.id, 'us.federal.ltcg.single.2026');
+    assert.equal(ltcg.taxYear, '2026');
+
+    // It must NOT claim to be verified, and must say what is uncertain.
+    assert.equal(ltcg.verification, 'estimated');
+    assert.ok(!ltcg.citations.some((c) => c.primary), 'no primary citation is claimed');
+    assert.match(ltcg.limitations.join(' '), /THESE ARE THE 2025 BREAKPOINTS/);
+  });
+
+  test('the expired 2025 tables are still reported as expired', () => {
+    const expired = registry.expiredRules('2026-08-23').map((r) => r.id);
+    assert.ok(expired.includes('us.federal.ltcg.single.2025'));
+    assert.ok(expired.includes('us.federal.ltcg.mfj.2025'));
   });
 
   test('a 2025 disposal resolves normally', () => {
@@ -229,11 +241,27 @@ describe('The 2026 gap is reported, not papered over', () => {
 });
 
 describe('Pack hygiene', () => {
-  test('every rule is in USD with a primary citation and stated limits', () => {
+  test('a rule may only claim VERIFIED when a primary source backs it', () => {
+    // The invariant is not "every rule has a primary citation" — the New York
+    // State and City schedules genuinely do not, and the 2026 capital gains
+    // breakpoints are carried forward. The invariant is that such a rule must
+    // NOT claim to be verified.
     for (const r of US_NY_RULES) {
-      assert.equal(r.currency, 'USD', `${r.id}`);
-      assert.ok(r.citations.some((c) => c.primary), `${r.id} has a primary source`);
-      assert.ok(r.limitations.length > 0 || r.id.includes('mfj'), `${r.id} states limitations`);
+      assert.equal(r.currency, 'USD', `${r.id} is in dollars`);
+      assert.ok(r.citations.length > 0, `${r.id} cites something`);
+      if (r.verification === 'verified') {
+        assert.ok(r.citations.some((c) => c.primary), `${r.id} claims verified, so needs a primary source`);
+      } else {
+        assert.ok(r.limitations.length > 0, `${r.id} is not verified, so must say what is uncertain`);
+      }
+    }
+  });
+
+  test('the secondary-sourced schedules are marked estimated, not verified', () => {
+    const secondary = US_NY_RULES.filter((r) => !r.citations.some((c) => c.primary));
+    assert.ok(secondary.length > 0, 'some schedules are secondary-sourced');
+    for (const r of secondary) {
+      assert.equal(r.verification, 'estimated', `${r.id} must be estimated`);
     }
   });
 

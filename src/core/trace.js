@@ -211,6 +211,19 @@ export class TraceBuilder {
     return this;
   }
 
+  /**
+   * The status set so far, for a caller that needs to return it alongside the
+   * built trace. Reading `builder._.status` from outside works but couples the
+   * caller to the builder's internals, which is how it gets broken later.
+   */
+  currentStatus() { return this._.status; }
+
+  /** Weaken the status to `s` if `s` is weaker; never strengthen it. */
+  atMost(s) {
+    this._.status = weakestStatus([this._.status, s]);
+    return this;
+  }
+
   assume(message) { this._.assumptions.push(message); return this; }
   warn(message) { this._.warnings.push(message); return this; }
   limitation(message) { this._.limitations.push(message); return this; }

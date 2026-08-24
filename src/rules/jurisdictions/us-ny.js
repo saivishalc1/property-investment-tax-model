@@ -126,6 +126,57 @@ export const FEDERAL_LTCG_MFJ_2025 = defineRule({
 });
 
 /**
+ * Long-term capital gains for 2026 — CARRIED FORWARD AND MARKED ESTIMATED.
+ *
+ * The 2025 tables above expire on 2025-12-31, which is correct: they are 2025
+ * figures. But leaving a hard gap there means the product cannot price a 2026
+ * disposal in its flagship market at all, and a refusal is only the right
+ * answer when there is no defensible number.
+ *
+ * IRS Topic 409 published the 2025 thresholds at the access date and the 2026
+ * inflation release (Rev. Proc. 2025-32) covers the ordinary brackets without
+ * restating the capital-gains breakpoints, so the 2026 figures could not be
+ * confirmed from a primary source in this pass. These rules therefore carry the
+ * 2025 thresholds forward and are marked ESTIMATED, not VERIFIED — the product
+ * shows a number and says plainly that this particular number is an estimate.
+ *
+ * The breakpoints are inflation-indexed and will move for 2026. Replace these
+ * the moment the 2026 schedule is published.
+ */
+const ltcg2026 = (id, filingStatus, bands) => defineRule({
+  id,
+  name: `Federal long-term capital gains — ${filingStatus} (2026, estimated)`,
+  version: '2026-estimated',
+  description: 'The 2025 breakpoints carried into 2026 because the 2026 schedule was not published at the access date.',
+  jurisdiction: { country: 'US' },
+  category: CATEGORY.CAPITAL_GAINS_TAX,
+  method: METHOD.PROGRESSIVE_SLICE,
+  payer: PAYER.SELLER,
+  taxYear: '2026',
+  effectiveFrom: '2026-01-01',
+  effectiveTo: '2026-12-31',
+  currency: 'USD',
+  rounding: { scale: 2, mode: 'HALF_UP' },
+  bands,
+  applicability: { ownership: [OWNERSHIP.INDIVIDUAL], filingStatus: [filingStatus] },
+  citations: [irs('Topic no. 409, Capital gains and losses — 2025 breakpoints, carried forward', URL_409, false)],
+  lastReviewed: REVIEWED,
+  verification: STATUS.ESTIMATED,
+  limitations: [
+    'THESE ARE THE 2025 BREAKPOINTS. The 2026 schedule had not been published at the access date, and the breakpoints are inflation-indexed, so the real 2026 figures will be higher. A gain sitting near a breakpoint may be taxed at the wrong rate here.',
+    'Replace with the published 2026 schedule as soon as it is available.',
+  ],
+});
+
+export const FEDERAL_LTCG_SINGLE_2026 = ltcg2026('us.federal.ltcg.single.2026', 'single', [
+  { from: '0', rate: '0' }, { from: '48350', rate: '15' }, { from: '533400', rate: '20' },
+]);
+
+export const FEDERAL_LTCG_MFJ_2026 = ltcg2026('us.federal.ltcg.mfj.2026', 'mfj', [
+  { from: '0', rate: '0' }, { from: '96700', rate: '15' }, { from: '600050', rate: '20' },
+]);
+
+/**
  * Unrecaptured section 1250 gain — the CEILING, not a rate.
  *
  * The IRS wording is that this portion of the gain "is taxed at a maximum 25%
@@ -373,8 +424,167 @@ export const US_NY_DECLARED_GAPS = Object.freeze([
   },
 ]);
 
+/* ------------------------------------------------------------------ *
+ * Ordinary income — federal, state and city
+ * ------------------------------------------------------------------ *
+ * Rental income is ordinary income, and in New York City three schedules stack
+ * on it. They are separate rules because they are separate taxes with
+ * DIFFERENT verification: the federal figures were read from the IRS release
+ * directly, while the state and city schedules could not be confirmed from a
+ * primary source and are marked estimated so the interface will not present
+ * them as checked.
+ */
+
+const FEDERAL_2026_URL = 'https://www.irs.gov/newsroom/irs-releases-tax-inflation-adjustments-for-tax-year-2026-including-amendments-from-the-one-big-beautiful-bill';
+
+const federalOrdinary = (id, filingStatus, bands) => defineRule({
+  id,
+  name: `Federal ordinary income tax — ${filingStatus}`,
+  version: '2026',
+  description: 'Marginal federal rates on ordinary income, which includes net rental income.',
+  jurisdiction: { country: 'US' },
+  category: CATEGORY.INCOME_TAX,
+  component: COMPONENT.NATIONAL,
+  method: METHOD.PROGRESSIVE_SLICE,
+  payer: PAYER.OWNER,
+  taxYear: '2026',
+  effectiveFrom: '2026-01-01',
+  effectiveTo: '2026-12-31',
+  currency: 'USD',
+  rounding: { scale: 2, mode: 'HALF_UP' },
+  bands,
+  applicability: { ownership: [OWNERSHIP.INDIVIDUAL], filingStatus: [filingStatus] },
+  citations: [irs('IRS releases tax inflation adjustments for tax year 2026 (Rev. Proc. 2025-32)', FEDERAL_2026_URL)],
+  lastReviewed: REVIEWED,
+  verification: STATUS.VERIFIED,
+  limitations: [
+    'Bands apply to TAXABLE income, after the standard or itemised deduction. Supply income on that basis.',
+    'The section 199A qualified business income deduction is not modelled.',
+    'Alternative Minimum Tax is not modelled.',
+  ],
+});
+
+export const FEDERAL_ORDINARY_SINGLE = federalOrdinary('us.federal.ordinary.single', 'single', [
+  { from: '0', rate: '10' }, { from: '12400', rate: '12' }, { from: '50400', rate: '22' },
+  { from: '105700', rate: '24' }, { from: '201775', rate: '32' }, { from: '256225', rate: '35' },
+  { from: '640600', rate: '37' },
+]);
+
+export const FEDERAL_ORDINARY_MFJ = federalOrdinary('us.federal.ordinary.mfj', 'mfj', [
+  { from: '0', rate: '10' }, { from: '24800', rate: '12' }, { from: '100800', rate: '22' },
+  { from: '211400', rate: '24' }, { from: '403550', rate: '32' }, { from: '512450', rate: '35' },
+  { from: '768700', rate: '37' },
+]);
+
+/**
+ * New York State personal income tax.
+ *
+ * VERIFICATION IS WEAKER HERE AND THE RULE SAYS SO. Publication NYS-50-T-NYS
+ * confirms the Chapter 59 rate reductions took effect for 2026 but embeds them
+ * in withholding formulas rather than publishing a bracket schedule. These
+ * bands come from secondary sources that agree with each other, so the rule is
+ * ESTIMATED, not VERIFIED.
+ */
+const nyState = (id, filingStatus, bands) => defineRule({
+  id,
+  name: `New York State income tax — ${filingStatus}`,
+  version: '2026',
+  jurisdiction: { country: 'US', region: 'US-NY' },
+  category: CATEGORY.INCOME_TAX,
+  component: COMPONENT.LOCAL,
+  method: METHOD.PROGRESSIVE_SLICE,
+  payer: PAYER.OWNER,
+  taxYear: '2026',
+  effectiveFrom: '2026-01-01',
+  effectiveTo: '2026-12-31',
+  currency: 'USD',
+  rounding: { scale: 2, mode: 'HALF_UP' },
+  bands,
+  applicability: { ownership: [OWNERSHIP.INDIVIDUAL], filingStatus: [filingStatus] },
+  citations: [
+    nys('NY Tax Law section 601 as amended by Chapter 59 of the Laws of 2025', 'https://www.tax.ny.gov/bus/wt/rate.htm', false),
+  ],
+  lastReviewed: REVIEWED,
+  verification: STATUS.ESTIMATED,
+  limitations: [
+    'The Department publishes the 2026 reductions inside withholding formulas rather than as a bracket schedule. These bands come from corroborating secondary sources and are NOT confirmed against a primary source.',
+    'New York does not tax capital gains at a preferential rate: gain is ordinary income under this schedule.',
+    'The supplemental tax that recaptures lower-bracket benefit at high incomes is not modelled.',
+  ],
+});
+
+export const NY_STATE_SINGLE = nyState('us-ny.state.income.single', 'single', [
+  { from: '0', rate: '3.9' }, { from: '8500', rate: '4.4' }, { from: '11700', rate: '5.15' },
+  { from: '13900', rate: '5.4' }, { from: '80650', rate: '5.9' }, { from: '215400', rate: '6.85' },
+  { from: '1077550', rate: '9.65' }, { from: '5000000', rate: '10.3' }, { from: '25000000', rate: '10.9' },
+]);
+
+export const NY_STATE_MFJ = nyState('us-ny.state.income.mfj', 'mfj', [
+  { from: '0', rate: '3.9' }, { from: '17150', rate: '4.4' }, { from: '23600', rate: '5.15' },
+  { from: '27900', rate: '5.4' }, { from: '161550', rate: '5.9' }, { from: '323200', rate: '6.85' },
+  { from: '2155350', rate: '9.65' }, { from: '5000000', rate: '10.3' }, { from: '25000000', rate: '10.9' },
+]);
+
+/** New York City resident income tax. Also secondary-sourced. */
+const nycIncome = (id, filingStatus, bands) => defineRule({
+  id,
+  name: `New York City resident income tax — ${filingStatus}`,
+  version: '2026',
+  jurisdiction: { country: 'US', region: 'US-NY', locality: 'NYC' },
+  category: CATEGORY.INCOME_TAX,
+  component: COMPONENT.SURTAX,
+  method: METHOD.PROGRESSIVE_SLICE,
+  payer: PAYER.OWNER,
+  taxYear: '2026',
+  effectiveFrom: '2026-01-01',
+  effectiveTo: '2026-12-31',
+  currency: 'USD',
+  rounding: { scale: 2, mode: 'HALF_UP' },
+  bands,
+  applicability: { ownership: [OWNERSHIP.INDIVIDUAL], filingStatus: [filingStatus] },
+  citations: [
+    nys('NYC resident income tax schedule; TSB-M-10(7)I is marked obsolete by the Department', 'https://www.tax.ny.gov/pdf/memos/income/m10_7i.pdf', false),
+  ],
+  lastReviewed: REVIEWED,
+  verification: STATUS.ESTIMATED,
+  limitations: [
+    'The Department marks its own memorandum on this schedule obsolete. Thresholds come from corroborating secondary sources and are NOT confirmed against a primary source.',
+    'Applies only to a New York City resident. A non-resident owner of city property does not pay it.',
+    'Above 90,000 dollars of taxable income the rate is a flat 3.876%, which is where most investors this product serves will sit.',
+  ],
+});
+
+export const NYC_INCOME_SINGLE = nycIncome('us-ny.nyc.income.single', 'single', [
+  { from: '0', rate: '3.078' }, { from: '12000', rate: '3.762' },
+  { from: '25000', rate: '3.819' }, { from: '50000', rate: '3.876' },
+]);
+
+export const NYC_INCOME_MFJ = nycIncome('us-ny.nyc.income.mfj', 'mfj', [
+  { from: '0', rate: '3.078' }, { from: '21600', rate: '3.762' },
+  { from: '45000', rate: '3.819' }, { from: '90000', rate: '3.876' },
+]);
+
+/**
+ * Section 469(i): how much of a rental loss an actively participating
+ * individual may deduct now rather than suspend to the disposal.
+ */
+export const SECTION_469_ALLOWANCE = Object.freeze({
+  max: '25000',
+  phaseStart: '100000',
+  phaseRate: '0.5',
+  zeroAt: '150000',
+  /** Married filing separately gets nil unless the spouses lived apart all year. */
+  mfsMax: '0',
+  citation: irs('Publication 925, Passive Activity and At-Risk Rules', 'https://www.irs.gov/publications/p925'),
+  verification: STATUS.VERIFIED,
+});
+
 export const US_NY_RULES = Object.freeze([
-  FEDERAL_LTCG_2025, FEDERAL_LTCG_MFJ_2025, FEDERAL_1250_CAP, NIIT,
+  FEDERAL_LTCG_2025, FEDERAL_LTCG_MFJ_2025,
+  FEDERAL_LTCG_SINGLE_2026, FEDERAL_LTCG_MFJ_2026,
+  FEDERAL_1250_CAP, NIIT,
+  FEDERAL_ORDINARY_SINGLE, FEDERAL_ORDINARY_MFJ,
+  NY_STATE_SINGLE, NY_STATE_MFJ, NYC_INCOME_SINGLE, NYC_INCOME_MFJ,
   NYS_TRANSFER_TAX, NYS_MANSION_TAX, NYS_ADDITIONAL_BASE_NYC_RESIDENTIAL,
   NYC_RPTT_RESIDENTIAL, NYC_RPTT_COMMERCIAL,
 ]);

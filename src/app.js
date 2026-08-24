@@ -185,6 +185,10 @@ function applyPreset(key) {
   bracketEditorsBuiltFor = null;
   S.rates = structuredClone(preset.rates);
   S.meta.preset = key;
+  // Record the currency this market prices in, so a later mismatch with the
+  // figures already on screen can be reported rather than silently computed on.
+  const jc = jurisdictionFor(key).currency;
+  if (jc && !S.meta.enteredCurrency) S.meta.enteredCurrency = jc;
   // Follow the local convention for who pays transfer tax, but never touch any
   // other number the user has entered.
   const side = preset.dutySide === 'buyer' ? 'buyer' : 'seller';

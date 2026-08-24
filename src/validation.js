@@ -171,6 +171,18 @@ export function validate(state) {
   // researched packs, and stayed silent on Texas, Florida and California,
   // which have none.
   const coverage = jurisdictionFor(state.meta.preset);
+
+  // Money figures are not converted when the market changes, by design — the
+  // model never rewrites what the user typed. But an unconverted figure is a
+  // wrong figure, so it has to be said out loud.
+  const entered = state.meta && state.meta.enteredCurrency;
+  if (coverage.currency && entered && entered !== coverage.currency) {
+    warnings.push(
+      `The amounts on screen were entered in ${entered} and this market is priced in `
+      + `${coverage.currency}. Switching market does not convert them, so the price, rent and `
+      + 'other income are all being read as ' + coverage.currency + '. Re-enter them for this market.',
+    );
+  }
   if (coverage.coverage !== COVERAGE.MODELLED) {
     warnings.push(
       'This market has no researched rule pack. Its rates were entered by hand with no effective dates, '
