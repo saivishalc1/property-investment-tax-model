@@ -976,3 +976,170 @@ dialog::backdrop { background: rgba(10, 12, 16, .55); }
 .report-caveats li + li {
   margin-top: 0.3rem;
 }
+
+/* ------------------------------------------------------------------ *
+ * Saved property library
+ * ------------------------------------------------------------------ *
+ * A register, not a gallery. Rows rather than cards, because the owner is
+ * scanning down a column of names and prices to find one property — the
+ * comparison that matters is vertical, and cards break it into a grid the eye
+ * has to reassemble. Same reason a rent roll is a table.
+ */
+.workspace {
+  max-width: 68rem;
+  margin: 0 auto;
+  padding: 2.5rem 1.25rem 4rem;
+}
+
+.workspace-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.75rem;
+}
+
+.workspace-head h1 {
+  font-family: var(--serif);
+  font-size: var(--step3);
+  margin: 0 0 0.15rem;
+}
+
+.workspace-head .help { margin: 0; }
+
+.workspace-controls {
+  display: flex;
+  align-items: flex-end;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+  padding-bottom: 1rem;
+  margin-bottom: 0.25rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.field-inline { margin: 0; min-width: 0; }
+.field-inline label { display: block; font-size: var(--step-1); color: var(--text-2); margin-bottom: 0.3rem; }
+.workspace-controls .field-inline:first-child { flex: 1 1 16rem; }
+.workspace-actions { margin-left: auto; display: flex; gap: 0.5rem; }
+
+.property-list { list-style: none; margin: 0; padding: 0; }
+
+.property-row {
+  display: grid;
+  /* One row, not two. A second grid row for the actions reserved its height
+     even while the actions were invisible, so the list stood twice as tall as
+     it needed to and the eye had to travel further between names. */
+  grid-template-columns: minmax(0, 1fr) auto auto minmax(0, auto);
+  grid-template-areas: 'open figure updated actions';
+  align-items: center;
+  gap: 0.25rem 1.5rem;
+  padding: 0.7rem 0.25rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.property-row:hover { background: var(--surface-2); }
+.property-row.is-archived { opacity: 0.6; }
+
+.property-open {
+  grid-area: open;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+.property-name {
+  font-weight: 600;
+  color: var(--accent);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.property-open:hover .property-name { text-decoration: underline; }
+
+.property-meta {
+  font-size: var(--step-1);
+  color: var(--text-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Figures are tabular AND right-aligned, so the column of prices reads as a
+   column: the eye compares magnitudes down the last digit, which is the whole
+   reason a rent roll aligns its numbers. */
+.property-figure {
+  grid-area: figure;
+  justify-self: end;
+  text-align: right;
+  min-width: 7rem;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+  white-space: nowrap;
+}
+
+.property-updated {
+  grid-area: updated;
+  justify-self: end;
+  min-width: 7rem;
+  text-align: right;
+  font-size: var(--step-1);
+  color: var(--text-3);
+  white-space: nowrap;
+}
+
+/* Row actions stay out of the way until the row is hovered or focused, so a
+   long list reads as names and prices rather than a wall of buttons — but they
+   are always present for a keyboard user, never display:none. */
+.property-actions {
+  grid-area: actions;
+  display: flex;
+  gap: 0.4rem;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.property-row:hover .property-actions,
+.property-row:focus-within .property-actions { opacity: 1; }
+
+@media (prefers-reduced-motion: reduce) {
+  .property-actions { transition: none; }
+}
+
+.btn-danger { color: var(--neg); }
+
+.empty-state {
+  padding: 3rem 0;
+  text-align: center;
+  color: var(--text-3);
+}
+
+.save-status {
+  font-size: var(--step-1);
+  color: var(--text-3);
+  white-space: nowrap;
+}
+.save-status[data-state='error'] { color: var(--neg); }
+
+@media (max-width: 52rem) {
+  .property-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: 'open figure' 'open updated' 'actions actions';
+    gap: 0.15rem 1rem;
+    padding: 0.85rem 0.25rem;
+  }
+  .property-actions { opacity: 1; flex-wrap: wrap; }
+  .workspace-actions { margin-left: 0; }
+}
+
+/* A hidden grid container must not still lay out its columns. */
+.shell[hidden] { display: none; }
+
+.workspace-head-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }

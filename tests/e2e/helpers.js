@@ -13,14 +13,25 @@ export function trackConsole(page) {
   return errors;
 }
 
-/** Open the app and dismiss the welcome dialog by starting a new analysis. */
+/**
+ * Open the app and start a new analysis.
+ *
+ * The entry point is the saved property library rather than a modal, so this
+ * clicks through to a fresh analysis. Each test gets its own browser context,
+ * so the library starts empty.
+ */
 export async function openApp(page, url = '/') {
   await page.goto(url);
-  const dialog = page.locator('#welcomeDialog');
-  await dialog.waitFor({ state: 'visible' });
-  await page.locator('#wNew').click();
-  await dialog.waitFor({ state: 'hidden' });
   await page.waitForFunction(() => document.documentElement.dataset.ready === 'true');
+  await page.locator('#wsNew').click();
+  await page.locator('#workspace').waitFor({ state: 'hidden' });
+}
+
+/** Open the app and stay in the library. */
+export async function openLibrary(page, url = '/') {
+  await page.goto(url);
+  await page.waitForFunction(() => document.documentElement.dataset.ready === 'true');
+  await page.locator('#workspace').waitFor({ state: 'visible' });
 }
 
 /** Read a value from the exposed read-only test bridge. */

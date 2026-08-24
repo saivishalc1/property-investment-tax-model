@@ -14,6 +14,7 @@ import { Money, formatMoney } from './core/money.js';
 import { jurisdictionFor, COVERAGE } from './engine/jurisdiction.js';
 import { computeTransactionTaxes } from './engine/transactions.js';
 import { applyCopy } from './engine/copy.js';
+import * as workspace from './workspace.js';
 import { validate } from './validation.js';
 import * as store from './storage.js';
 
@@ -1742,6 +1743,37 @@ function onChange() {
     S.meta.updated = new Date().toISOString();
     store.saveAutosave(S);
   }, 400);
+
+  // Keep the saved property in step with the scratch autosave, but only once
+  // the library is actually in play — a deep link opened before the workspace
+  // has initialised must not create a stray record.
+  if (results && !$('#workspace')?.hidden === false) workspace.scheduleSave(S, saveSummary());
+}
+
+/**
+ * The handful of figures the library list shows.
+ *
+ * Deliberately small. The list must render a hundred properties without
+ * recomputing any of them, and a stale rate of return is worse than none — so
+ * only what identifies the deal is stored, plus the price a person recognises
+ * it by.
+ */
+function saveSummary() {
+  const j = jurisdictionFor(S.meta.preset);
+  return {
+    country: j.country,
+    jurisdiction: S.meta.preset,
+    currency: j.currency,
+    taxYear: (PRESETS[S.meta.preset] || {}).taxYear || null,
+    ruleStatus: results?.meta?.engineStatus || null,
+    price: results?.purchase?.price ?? num(S.purchase.price),
+    cashRequired: results?.purchase?.cashAtClosing ?? null,
+    noi: results?.hold?.year1?.noi ?? null,
+    capRate: results?.returns?.capRate ?? null,
+    cashOnCash: results?.returns?.cashOnCash ?? null,
+    irr: results?.returns?.irr ?? null,
+    totalProfit: results?.returns?.totalProfit ?? null,
+  };
 }
 
 function renderAll() {
@@ -1910,29 +1942,46 @@ function wire() {
     announce('Started over with the default New York City scenario.');
   });
 
-  // welcome dialog
-  const wel = $('#welcomeDialog');
+  /*
+   * The saved property library is the entry point.
+   *
+   * A modal asking "new, example, or continue?" on every visit is a question
+   * the library already answers by showing what is there. Opening an analysis
+   * or starting one switches to the workflow; the Properties button returns.
+   */
   const saved = store.loadAutosave();
-  const cont = $('#wContinue');
-  if (saved) {
-    cont.disabled = false;
-    $('#wContinueDesc').textContent = `${saved.meta.name} · last edited ${dateLong(saved.meta.updated)}`;
-  } else {
-    cont.disabled = true;
-  }
-  const start = (state, step) => {
+
+  const openAnalysis = (state, step) => {
     S = state;
-    wel.close();
+    workspace.showAnalysis();
     onChange();
-    // The dialog returns focus to the page; leave it at the top so the skip
-    // link is still the first thing a keyboard user reaches.
     goTo(step || 'property', false);
     document.activeElement && document.activeElement.blur();
   };
-  $('#wNew').addEventListener('click', () => start(store.defaultState()));
-  $('#wExample').addEventListener('click', () => start(store.nycExampleState(), 'results'));
-  $('#wContinue').addEventListener('click', () => start(saved || store.defaultState()));
-  wel.addEventListener('close', () => { if (!results) onChange(); });
+
+  $('#libraryBtn').addEventListener('click', async () => {
+    // Flush any pending autosave before leaving, so the list is accurate.
+    await workspace.saveNow(S, saveSummary());
+    await workspace.showWorkspace();
+  });
+
+  void workspace.initWorkspace({
+    onNew: () => {
+      workspace.setCurrentRecord(null);
+      openAnalysis(store.defaultState());
+    },
+    onOpen: (record) => {
+      workspace.setCurrentRecord(record.id);
+      openAnalysis(store.migrate(record.scenario) || store.defaultState());
+    },
+    onExample: () => {
+      // A worked example is how someone checks the model against a deal they
+      // already understand. It was a choice on the old welcome modal; losing it
+      // with the modal would have removed a real affordance.
+      workspace.setCurrentRecord(null);
+      openAnalysis(store.nycExampleState(), 'results');
+    },
+  });
 
   // keyboard: Escape closes tooltips
   document.addEventListener('keydown', (e) => {
@@ -1942,25 +1991,29 @@ function wire() {
     }
   });
 
-  return { wel, saved };
+  return { saved };
 }
 
 function init() {
   const prefs = store.loadPrefs();
   if (prefs.theme) applyTheme(prefs.theme);
 
-  const { wel, saved } = wire();
+  const { saved } = wire();
 
   const hash = (location.hash || '').replace('#', '');
   const deepLinked = STEPS.includes(hash);
-  const skipWelcome = deepLinked || new URLSearchParams(location.search).has('nowelcome');
 
   if (saved) S = saved;
   onChange();
-  goTo(deepLinked ? hash : 'property', false);
 
-  if (!skipWelcome && typeof wel.showModal === 'function') {
-    wel.showModal();
+  if (deepLinked) {
+    // A deep link goes straight to the analysis, which is what a bookmark to a
+    // particular step is for.
+    workspace.showAnalysis();
+    goTo(hash, false);
+  } else {
+    goTo('property', false);
+    void workspace.showWorkspace();
   }
 
   document.documentElement.dataset.ready = 'true';

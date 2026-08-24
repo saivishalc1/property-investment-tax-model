@@ -23,11 +23,11 @@
 <link rel="icon" href="./assets/favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="./assets/icon-180.png">
 <link rel="manifest" href="./assets/site.webmanifest">
-<link rel="stylesheet" href="./src/styles.css?v=936f690896">
+<link rel="stylesheet" href="./src/styles.css?v=83ab452495">
 </head>
 <body>
 
-<a class="skip-link" href="#main">Skip to main content</a>
+<a class="skip-link" id="skipLink" href="#workspace">Skip to main content</a>
 
 <header class="app-header no-print">
   <div class="header-inner">
@@ -37,9 +37,13 @@
     </div>
     <div class="header-spacer"></div>
     <div class="header-tools">
+      <!-- Persistent save status. A workspace that autosaves must say so, or
+           the owner cannot tell whether closing the tab loses their work. -->
+      <span class="save-status" id="saveStatus" role="status" aria-live="polite" hidden></span>
+      <button type="button" class="btn btn-sm" id="libraryBtn" hidden>Properties</button>
       <div class="segmented" role="group" aria-label="Detail level">
-        <button type="button" id="modeQuick" aria-pressed="true">Quick estimate</button>
-        <button type="button" id="modePro" aria-pressed="false">Professional</button>
+        <button type="button" id="modeQuick" aria-pressed="true">Standard</button>
+        <button type="button" id="modePro" aria-pressed="false">Detailed</button>
       </div>
       <button type="button" class="btn btn-sm" id="resetBtn">Start over</button>
       <button type="button" class="btn btn-sm" id="themeBtn" aria-pressed="false">
@@ -49,7 +53,62 @@
   </div>
 </header>
 
-<section class="deal-strip no-print" id="dealStrip" aria-label="Deal summary">
+<!-- ================= saved property library =================
+     The first thing the owner sees. Opening straight into a blank calculator
+     assumes every visit starts a new analysis, when most start by returning to
+     one. Hidden while an analysis is open. -->
+<section class="workspace" id="workspace" tabindex="-1" aria-labelledby="workspaceTitle">
+  <div class="workspace-head">
+    <div>
+      <h1 id="workspaceTitle">Properties</h1>
+      <p class="help" id="workspaceCount">No saved analyses yet.</p>
+    </div>
+    <div class="workspace-head-actions">
+      <button type="button" class="btn" id="wsExample">Load worked example</button>
+      <button type="button" class="btn btn-primary" id="wsNew">New property analysis</button>
+    </div>
+  </div>
+
+  <div class="workspace-controls">
+    <div class="field field-inline">
+      <label for="wsSearch">Search</label>
+      <div class="control">
+        <input type="search" id="wsSearch" placeholder="Name, address or market" autocomplete="off">
+      </div>
+    </div>
+    <div class="field field-inline">
+      <label for="wsSort">Sort by</label>
+      <div class="control">
+        <select id="wsSort">
+          <option value="updated">Last updated</option>
+          <option value="created">Date created</option>
+          <option value="name">Name</option>
+          <option value="location">Location</option>
+          <option value="country">Country</option>
+        </select>
+      </div>
+    </div>
+    <div class="field field-inline">
+      <span class="switch-text"><label for="wsArchived">Show archived</label></span>
+      <input type="checkbox" class="switch" id="wsArchived">
+    </div>
+    <div class="workspace-actions">
+      <button type="button" class="btn btn-sm" id="wsExport">Export backup</button>
+      <button type="button" class="btn btn-sm" id="wsImportBtn">Import backup</button>
+      <input type="file" id="wsImport" accept="application/json,.json" hidden>
+    </div>
+  </div>
+
+  <div id="wsNotice" class="callout" hidden></div>
+
+  <ul class="property-list" id="wsList" aria-labelledby="workspaceTitle"></ul>
+
+  <p class="empty-state" id="wsEmpty" hidden>
+    Nothing saved yet. Start a new property analysis and it will be kept here automatically.
+  </p>
+</section>
+
+<section class="deal-strip no-print" id="dealStrip" aria-label="Deal summary" hidden>
   <div class="deal-inner">
     <div class="deal-id">
       <span class="deal-name" id="dealName">Untitled property</span>
@@ -989,24 +1048,6 @@
 </details>
 
 <!-- ================= dialogs ================= -->
-<dialog id="welcomeDialog" aria-labelledby="welcomeTitle">
-  <form method="dialog">
-    <div class="dialog-head">
-      <h2 id="welcomeTitle">Property Investment Tax Model</h2>
-      <p class="help">A deterministic planning model for New York investment property. Everything runs in your browser; nothing is uploaded.</p>
-    </div>
-    <div class="dialog-body">
-      <div class="choice-list">
-        <button type="button" class="choice" id="wNew"><span class="t">New analysis</span><span class="d">Start from the New York City defaults</span></button>
-        <button type="button" class="choice" id="wExample"><span class="t">New York City example</span><span class="d">A $1.25M Upper East Side condo, held ten years</span></button>
-        <button type="button" class="choice" id="wContinue"><span class="t">Continue where you left off</span><span class="d" id="wContinueDesc">No saved session found</span></button>
-      </div>
-    </div>
-    <div class="dialog-foot">
-      <p class="help dialog-note">Planning software, not tax-preparation software. Rates checked against published sources; not reviewed by a CPA.</p>
-    </div>
-  </form>
-</dialog>
 
 
 <noscript>
@@ -1016,6 +1057,6 @@
   </div>
 </noscript>
 
-<script type="module" src="./src/app.js?v=936f690896"></script>
+<script type="module" src="./src/app.js?v=83ab452495"></script>
 </body>
 </html>

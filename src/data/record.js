@@ -85,10 +85,21 @@ export function newId() {
  */
 export function createRecord({ scenario, summary = {}, name, id } = {}) {
   const ts = nowIso();
+  /*
+   * What a property is called.
+   *
+   * The field the owner actually types into is labelled "Property address or
+   * name" and is what the deal header and the report already use, so it is the
+   * identity. scenario.meta.name is the SCENARIO's name and stays at its
+   * default unless the report is titled — using it first made every saved
+   * property read "New York City investment property".
+   */
+  const address = String(scenario?.purchase?.address || '').trim();
+  const resolvedName = (name || address || scenario?.meta?.name || 'Untitled property');
   return {
     recordVersion: RECORD_VERSION,
     id: id || newId(),
-    name: (name || scenario?.meta?.name || 'Untitled property').slice(0, 200),
+    name: resolvedName.slice(0, 200),
     address: String(scenario?.purchase?.address || '').slice(0, 300),
     country: summary.country || null,
     jurisdiction: summary.jurisdiction || scenario?.meta?.preset || null,

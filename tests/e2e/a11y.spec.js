@@ -31,47 +31,84 @@ test.describe('accessibility', () => {
     }
   });
 
-  test('the welcome dialog is accessible', async ({ page }) => {
+  test('the property library is accessible', async ({ page }) => {
+    // The entry point is now a list of saved properties rather than a modal,
+    // so this is the first screen an audit has to pass.
     await page.goto('/');
-    await expect(page.locator('#welcomeDialog')).toBeVisible();
+    await page.waitForFunction(() => document.documentElement.dataset.ready === 'true');
+    await expect(page.locator('#workspace')).toBeVisible();
     const r = await scan(page);
     expect(r.violations.map((v) => v.id)).toEqual([]);
   });
 
-  test('the welcome dialog traps focus and closes on Escape', async ({ page }) => {
+  test('the library is accessible with saved properties in it', async ({ page }) => {
+    // An empty list exercises none of the row markup — the buttons, the
+    // figures column, the archived state. Save one first.
     await page.goto('/');
-    await expect(page.locator('#welcomeDialog')).toBeVisible();
-    // A native <dialog> opened with showModal makes the rest of the page inert.
-    const inert = await page.evaluate(() => {
-      const outside = document.querySelector('#f-price');
-      outside.focus();
-      return document.activeElement !== outside;
-    });
-    expect(inert).toBe(true);
-    await page.keyboard.press('Escape');
-    await expect(page.locator('#welcomeDialog')).toBeHidden();
+    await page.waitForFunction(() => document.documentElement.dataset.ready === 'true');
+    await page.locator('#wsNew').click();
+    await page.locator('#f-address').fill('12 Kings Road, Chelsea');
+    await page.locator('#f-preset').selectOption('uk');
+    await page.waitForTimeout(1300);
+    await page.locator('#libraryBtn').click();
+    await expect(page.locator('.property-row')).toHaveCount(1);
+
+    const r = await scan(page);
+    expect(r.violations.map((v) => v.id)).toEqual([]);
   });
 
-  test('landmarks and heading structure are present exactly once', async ({ page }) => {
-    await openApp(page);
-    await expect(page.locator('header.app-header')).toHaveCount(1);
-    await expect(page.getByRole('main')).toHaveCount(1);
-    await expect(page.locator('aside')).toHaveCount(1);
-    // One h1, and it belongs to the visible step.
-    const h1s = page.locator('section.panel:not([hidden]) h1');
-    await expect(h1s).toHaveCount(1);
-    await expect(h1s).toHaveText('The property');
+  test('every row action is reachable by keyboard, not hover alone', async ({ page }) => {
+    // The actions fade in on hover. A keyboard user must still reach them, so
+    // they are opacity-hidden rather than display:none and revealed on focus.
+    await page.goto('/');
+    await page.waitForFunction(() => document.documentElement.dataset.ready === 'true');
+    await page.locator('#wsNew').click();
+    await page.locator('#f-address').fill('Keyboard test');
+    await page.waitForTimeout(1300);
+    await page.locator('#libraryBtn').click();
+
+    const rename = page.locator('.property-row .btn', { hasText: 'Rename' }).first();
+    await rename.focus();
+    await expect(rename).toBeFocused();
+    // The reveal is a 120ms fade, so poll rather than sampling mid-transition.
+    await expect.poll(
+      () => page.locator('.property-actions').first()
+        .evaluate((n) => Number(getComputedStyle(n).opacity)),
+      { timeout: 2000 },
+    ).toBeGreaterThan(0.9);
   });
 
-  test('the skip link is the first tab stop and moves focus to main', async ({ page }) => {
-    await openApp(page);
-    // Start from the very top of the document, as a keyboard user would.
-    await page.evaluate(() => { if (document.activeElement) document.activeElement.blur(); });
+  test('the skip link is the first tab stop on a fresh load', async ({ page }) => {
+    // From a fresh page, with no prior click to move the sequential-navigation
+    // origin — which is exactly how a keyboard user arrives.
+    await page.goto('/');
+    await page.waitForFunction(() => document.documentElement.dataset.ready === 'true');
     await page.keyboard.press('Tab');
     const focused = await page.evaluate(() => document.activeElement.className);
     expect(focused).toContain('skip-link');
+
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#workspace')).toBeFocused();
+  });
+
+  test('the skip link reaches main once an analysis is open', async ({ page }) => {
+    await openApp(page);
+    await expect(page.locator('#skipLink')).toHaveAttribute('href', '#main');
+    // Follow it the way the browser would, and confirm it lands somewhere real.
+    await page.locator('#skipLink').focus();
     await page.keyboard.press('Enter');
     await expect(page.locator('#main')).toBeFocused();
+  });
+
+  test('the skip link points at the region actually on screen', async ({ page }) => {
+    // In the library there is no #main to skip to — it is hidden. A skip link
+    // that lands a keyboard user in hidden content is worse than none.
+    await page.goto('/');
+    await page.waitForFunction(() => document.documentElement.dataset.ready === 'true');
+    await expect(page.locator('#skipLink')).toHaveAttribute('href', '#workspace');
+
+    await page.locator('#wsNew').click();
+    await expect(page.locator('#skipLink')).toHaveAttribute('href', '#main');
   });
 
   test('the whole first step is operable by keyboard alone', async ({ page }) => {

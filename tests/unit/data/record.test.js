@@ -28,7 +28,9 @@ describe('Creating a record', () => {
       scenario: scenario(),
       summary: { country: 'GB', currency: 'GBP', taxYear: '2026-27', price: 425000 },
     });
-    assert.equal(r.name, 'Kings Road');
+    // The name comes from the field the owner types into, which is labelled
+    // "Property address or name" — not from the scenario's own default name.
+    assert.equal(r.name, '12 Kings Road, Chelsea');
     assert.equal(r.address, '12 Kings Road, Chelsea');
     assert.equal(r.jurisdiction, 'uk');
     assert.equal(r.country, 'GB');
@@ -49,6 +51,14 @@ describe('Creating a record', () => {
   test('an unnamed property still gets a usable name', () => {
     const r = createRecord({ scenario: { purchase: {} } });
     assert.equal(r.name, 'Untitled property');
+  });
+
+  test('an explicit name always wins over the address', () => {
+    // A rename is the owner's decision and must not be overwritten the next
+    // time the address field changes.
+    const r = createRecord({ scenario: scenario(), name: 'The Chelsea deal' });
+    assert.equal(r.name, 'The Chelsea deal');
+    assert.equal(r.address, '12 Kings Road, Chelsea');
   });
 });
 

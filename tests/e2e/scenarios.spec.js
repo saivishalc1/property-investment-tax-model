@@ -16,14 +16,21 @@ test.describe('persistence and starting over', () => {
     await expect(page.getByRole('button', { name: 'Start over' })).toBeVisible();
   });
 
-  test('work is autosaved and offered back after a reload', async ({ page }) => {
+  test('work is saved to the library and comes back after a reload', async ({ page }) => {
+    // The old modal asked "continue where you left off?". The library answers
+    // that by simply having the property in it.
     await openApp(page);
+    await page.locator('#f-address').fill('Autosave check');
     await page.locator('#f-price').fill('765000');
-    await page.waitForTimeout(700); // debounce
+    await page.waitForTimeout(1400); // autosave debounce
 
     await page.reload();
-    await expect(page.locator('#wContinue')).toBeEnabled();
-    await page.locator('#wContinue').click();
+    await page.waitForFunction(() => document.documentElement.dataset.ready === 'true');
+    await expect(page.locator('#workspace')).toBeVisible();
+
+    const row = page.locator('.property-open', { hasText: 'Autosave check' });
+    await expect(row).toHaveCount(1);
+    await row.click();
     await expect(page.locator('#f-price')).toHaveValue('765000');
   });
 

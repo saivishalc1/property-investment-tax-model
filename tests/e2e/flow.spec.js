@@ -2,20 +2,23 @@ import { test, expect } from '@playwright/test';
 import { openApp, trackConsole, results, step } from './helpers.js';
 
 test.describe('core flow', () => {
-  test('welcome screen offers all four entry points', async ({ page }) => {
+  test('the library is the entry point and starts empty', async ({ page }) => {
     await page.goto('/');
-    const dialog = page.locator('#welcomeDialog');
-    await expect(dialog).toBeVisible();
-    await expect(page.locator('#wNew')).toBeEnabled();
-    await expect(page.locator('#wExample')).toBeEnabled();
-    // Nothing saved yet in a fresh context, so "continue" is disabled.
-    await expect(page.locator('#wContinue')).toBeDisabled();
+    await page.waitForFunction(() => document.documentElement.dataset.ready === 'true');
+    await expect(page.locator('#workspace')).toBeVisible();
+    await expect(page.locator('#wsEmpty')).toBeVisible();
+    await expect(page.locator('#workspaceCount')).toContainText('No saved analyses');
+    await expect(page.locator('#wsNew')).toBeEnabled();
+    await expect(page.locator('#wsExample')).toBeEnabled();
+    // The analysis shell is not on screen until a property is opened.
+    await expect(page.locator('.shell')).toBeHidden();
   });
 
   test('the NYC example loads and lands on results', async ({ page }) => {
     const errors = trackConsole(page);
     await page.goto('/');
-    await page.locator('#wExample').click();
+    await page.waitForFunction(() => document.documentElement.dataset.ready === 'true');
+    await page.locator('#wsExample').click();
     await expect(page.locator('#panel-results')).toBeVisible();
     await expect(page.locator('#brandScenario')).toContainText('New York City');
     const r = await results(page);
