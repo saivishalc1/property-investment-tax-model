@@ -1,15 +1,26 @@
 # Property Investment Tax Model
 
-A deterministic planning model for New York investment property. It takes a
-purchase, a mortgage, a rent roll, a tax profile and a sale assumption, and
-returns cash required, net operating income, after-tax cash flow, the tax due
-on the sale broken into its separate components, net proceeds, ROI and
-after-tax IRR — with a "How calculated" panel behind every figure.
+A deterministic planning model for investment property in **New York**,
+**England & Northern Ireland** and **Japan**. It takes a purchase, a mortgage,
+a rent roll, a tax profile and a sale assumption, and returns cash required,
+net operating income, after-tax cash flow, the tax due on the sale broken into
+its separate components, net proceeds, ROI and after-tax IRR — with the rule,
+its source and its effective dates behind every figure.
 
-It is a static site. There is no build step, no framework, no analytics and no
-network call of any kind. Every number is computed in your browser from
-arithmetic in `src/calculations.js`, and nothing you type ever leaves your
-device.
+Analyses are saved in a property library on your own device. The application
+itself sits behind Cloudflare Access, so only its owner can reach it; see
+[DEPLOYMENT.md](DEPLOYMENT.md).
+
+**No Claude, no LLM, no API, no tokens, no network call of any kind during a
+calculation.** Every rate is versioned data in `src/rules/`, cited to a primary
+source, and every figure is computed in exact decimal arithmetic in your
+browser. Nothing you type leaves your device. The build fails if a shipped file
+contains an external origin or a secret-shaped string, and a test asserts there
+is no `innerHTML`, `eval`, or `fetch` in the shipped code.
+
+Coverage — which rules are verified, which are estimated, and which cases are
+deliberately not modelled — is generated from the code itself in
+[COVERAGE.md](COVERAGE.md), and CI fails if it drifts.
 
 > **This is planning software, not tax-preparation software.** It has not been
 > reviewed or validated by a certified public accountant, an attorney, an

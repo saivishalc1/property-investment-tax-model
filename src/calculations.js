@@ -27,11 +27,6 @@ export function num(v) {
   return Number.isFinite(n) ? n : 0;
 }
 
-/** Round to cents so repeated arithmetic cannot drift. */
-export function round2(n) {
-  return Math.round((n + Number.EPSILON) * 100) / 100;
-}
-
 /* ------------------------------------------------------------------ *
  * Bracket tables
  * ------------------------------------------------------------------ *

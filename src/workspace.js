@@ -284,9 +284,14 @@ function notice(kind, message) {
 let saveTimer = null;
 let currentId = null;
 
-/** Which record the analysis view is editing, if any. */
+/**
+ * Which record the analysis view is editing.
+ *
+ * `null` starts a new one on the next save. app.js sets this when a property is
+ * opened from the library and clears it when a new analysis begins, so autosave
+ * knows whether to update an existing record or create one.
+ */
 export function setCurrentRecord(id) { currentId = id; }
-export function getCurrentRecord() { return currentId; }
 
 /**
  * Autosave, debounced.

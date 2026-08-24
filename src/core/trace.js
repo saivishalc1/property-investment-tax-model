@@ -50,9 +50,6 @@ export function weakestStatus(statuses) {
   return STATUS_ORDER[worst];
 }
 
-export function isAtLeast(status, minimum) {
-  return STATUS_ORDER.indexOf(status) <= STATUS_ORDER.indexOf(minimum);
-}
 
 /**
  * A single line of arithmetic within a trace — one band, one deduction, one

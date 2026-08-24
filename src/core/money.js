@@ -251,21 +251,3 @@ export function formatMoney(money, { compact = false, showCode = false } = {}) {
   return showCode ? `${s} ${def.code}` : s;
 }
 
-/** Format a dimensionless Decimal as a percentage string. */
-export function formatPercent(decimalValue, places = 2) {
-  const d = Decimal.of(decimalValue).rescale(places, ROUND.HALF_UP);
-  return `${d.toString()}%`;
-}
-
-/** Parse user-entered money text into Money, or throw with a useful message. */
-export function parseMoneyInput(text, code) {
-  const def = currencyOf(code);
-  const cleaned = String(text)
-    .replace(/[\s  ]/g, '')
-    .replace(new RegExp(`[${escapeForClass(def.symbol)}]`, 'g'), '')
-    .replace(/,/g, '');
-  if (cleaned === '') throw new SyntaxError('empty');
-  return Money.of(Decimal.parse(cleaned), code);
-}
-
-function escapeForClass(s) { return s.replace(/[\\\]^-]/g, '\\$&'); }

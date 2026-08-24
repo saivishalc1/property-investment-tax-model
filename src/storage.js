@@ -356,4 +356,3 @@ export function savePrefs(prefs) {
   return safeSet(KEY_PREFS, JSON.stringify(prefs || {}));
 }
 
-export const _keys = { KEY_AUTOSAVE, KEY_SCENARIOS, KEY_PREFS };
