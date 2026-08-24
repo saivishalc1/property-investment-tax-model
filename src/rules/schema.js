@@ -72,6 +72,31 @@ const CATEGORIES = new Set(Object.values(CATEGORY));
 /** Who bears the charge. Materially changes a deal's cash at closing. */
 export const PAYER = Object.freeze({ BUYER: 'buyer', SELLER: 'seller', OWNER: 'owner' });
 
+/**
+ * Which part of a composite charge a rule represents.
+ *
+ * A single "capital gains tax" bill in Japan is three separate charges levied
+ * by two different levels of government: national income tax, the national
+ * reconstruction surtax, and local inhabitant tax. They are ADDITIVE, not
+ * alternatives. Likewise a UK commercial purchase can attract both a charge on
+ * the premium and a separate charge on the net present value of the rent.
+ *
+ * Rules that are alternatives (resident vs non-resident SDLT) share a component
+ * and are separated by applicability. Rules that are components of one bill
+ * carry different component values and are all returned together.
+ */
+export const COMPONENT = Object.freeze({
+  /** The whole charge, where there is only one. The default. */
+  PRINCIPAL: 'principal',
+  NATIONAL: 'national',
+  LOCAL: 'local',
+  SURTAX: 'surtax',
+  /** UK: the charge on the lease premium or purchase price. */
+  PREMIUM: 'premium',
+  /** UK: the separate charge on the net present value of rent. */
+  LEASE_NPV: 'lease-npv',
+});
+
 export const PROPERTY_CLASS = Object.freeze({
   RESIDENTIAL: 'residential',
   COMMERCIAL: 'commercial',
@@ -87,6 +112,15 @@ export const OWNERSHIP = Object.freeze({
 });
 
 export const RESIDENCY = Object.freeze({ RESIDENT: 'resident', NON_RESIDENT: 'non_resident' });
+
+/**
+ * Holding-period class, where a jurisdiction charges gains differently by it.
+ *
+ * Japan's five-year line is the case this exists for. Which side a disposal
+ * falls on is decided by jpHoldingPeriodIsLongTerm(), not by this constant —
+ * this only lets a rule declare which side it covers.
+ */
+export const HOLDING_PERIOD = Object.freeze({ SHORT: 'short', LONG: 'long' });
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -189,8 +223,14 @@ export function defineRule(raw) {
     propertyClass: freezeList(id, raw.applicability?.propertyClass, PROPERTY_CLASS, 'propertyClass'),
     ownership: freezeList(id, raw.applicability?.ownership, OWNERSHIP, 'ownership'),
     residency: freezeList(id, raw.applicability?.residency, RESIDENCY, 'residency'),
+    holdingPeriod: freezeList(id, raw.applicability?.holdingPeriod, HOLDING_PERIOD, 'holdingPeriod'),
     filingStatus: raw.applicability?.filingStatus ? Object.freeze([...raw.applicability.filingStatus]) : null,
   });
+
+  const component = raw.component ?? COMPONENT.PRINCIPAL;
+  if (!Object.values(COMPONENT).includes(component)) {
+    fail(id, `component must be one of ${Object.values(COMPONENT).join(', ')}`);
+  }
 
   return Object.freeze({
     id,
@@ -199,6 +239,7 @@ export function defineRule(raw) {
     description: raw.description || null,
     jurisdiction: Object.freeze({ country: j.country, region: j.region ?? null, locality: j.locality ?? null }),
     category: raw.category,
+    component,
     method: raw.method,
     payer: raw.payer ?? null,
     taxYear: raw.taxYear,
@@ -310,6 +351,7 @@ export function appliesTo(rule, facts) {
   if (a.propertyClass && facts.propertyClass && !a.propertyClass.includes(facts.propertyClass)) return false;
   if (a.ownership && facts.ownership && !a.ownership.includes(facts.ownership)) return false;
   if (a.residency && facts.residency && !a.residency.includes(facts.residency)) return false;
+  if (a.holdingPeriod && facts.holdingPeriod && !a.holdingPeriod.includes(facts.holdingPeriod)) return false;
   if (a.filingStatus && facts.filingStatus && !a.filingStatus.includes(facts.filingStatus)) return false;
   return true;
 }
@@ -323,6 +365,7 @@ export function specificity(rule) {
   if (a.propertyClass) s += 1;
   if (a.ownership) s += 1;
   if (a.residency) s += 1;
+  if (a.holdingPeriod) s += 1;
   if (a.filingStatus) s += 1;
   return s;
 }
