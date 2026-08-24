@@ -181,9 +181,9 @@ test.describe('core flow', () => {
     await expect(status).toContainText('Rates checked');
     await expect(status).toContainText('HM Revenue');
 
-    await page.locator('#f-preset').selectOption('de');
-    await expect(status).toContainText('Experimental preset');
-    await expect(status).toContainText('no researched rule pack');
+    await page.locator('#f-preset').selectOption('jp');
+    await expect(status).toContainText('Rates checked');
+    await expect(status).toContainText('National Tax Agency');
   });
 
   test('the tax profile states exactly what was and was not checked', async ({ page }) => {
@@ -211,9 +211,21 @@ test.describe('core flow', () => {
   test('switching preset changes rates but leaves the property inputs alone', async ({ page }) => {
     await openApp(page);
     await page.locator('#f-price').fill('1100000');
-    await page.locator('#f-preset').selectOption('us-nys');
+
+    const read = () => page.evaluate(() => {
+      const r = globalThis.__pitm.getResults();
+      return { rate: r.meta.ordinaryRate, currency: r.meta.jurisdiction.currency };
+    });
+    const before = await read();
+
+    await page.locator('#f-preset').selectOption('jp');
+    // The number the user typed is never rewritten by a market change.
     await expect(page.locator('#f-price')).toHaveValue('1100000');
-    const cityTax = await page.evaluate(() => globalThis.__pitm.getResults().purchase.cityTransfer);
-    expect(cityTax).toBe(0);
+
+    const after = await read();
+    expect(after.currency).toBe('JPY');
+    expect(before.currency).toBe('USD');
+    // And the rates DID change — the whole point of switching market.
+    expect(after.rate).not.toBeCloseTo(before.rate, 3);
   });
 });

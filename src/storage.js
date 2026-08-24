@@ -238,7 +238,29 @@ export function migrate(raw) {
   }
 
   if (!out.meta.id) out.meta.id = newId();
-  if (!PRESETS[out.meta.preset]) out.meta.preset = 'us-nyc';
+
+  /*
+   * A saved scenario naming a market that no longer ships.
+   *
+   * This reset the preset to New York and stopped there, leaving the saved
+   * rates untouched — so a scenario saved against the German market came back
+   * labelled "New York City" while still computing on euro rates at 42%. The
+   * label and the arithmetic disagreed, and nothing said so.
+   *
+   * The rates now move with the label, and the substitution is recorded so the
+   * interface can tell the user their scenario was re-based rather than
+   * letting them discover it in a figure.
+   */
+  if (!PRESETS[out.meta.preset]) {
+    const removed = out.meta.preset;
+    const fallback = 'us-nyc';
+    out.meta.preset = fallback;
+    out.rates = structuredClone(PRESETS[fallback].rates);
+    out.meta.enteredCurrency = 'USD';
+    out.meta.marketRemoved = typeof removed === 'string' && removed ? removed : null;
+  } else {
+    out.meta.marketRemoved = null;
+  }
   if (out.meta.mode !== 'pro') out.meta.mode = 'quick';
   out.schemaVersion = SCHEMA_VERSION;
   return out;

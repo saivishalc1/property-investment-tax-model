@@ -1,26 +1,26 @@
 /**
  * jurisdiction.js — which preset corresponds to which modelled jurisdiction.
  *
- * THE PROBLEM THIS SOLVES. The product ships twenty-three presets. Three of
- * them correspond to a rule pack that has been researched against primary
- * sources; the other twenty carry hand-entered rates with no effective dates,
- * no citations and no verification status, and — because the old engine
- * ignored jurisdiction entirely — were silently charged United States federal
- * and New York State income tax on top.
+ * Every market the product ships is backed by a researched rule pack. That was
+ * not always so: it previously shipped twenty-three presets, of which three
+ * were researched and twenty carried hand-entered rates with no effective
+ * dates, no citations and no verification — and, because the old engine
+ * ignored jurisdiction entirely, were silently charged United States federal
+ * and New York State income tax on top. Those twenty were removed rather than
+ * carried as a caveat, because a market a professional cannot show a client is
+ * not a market.
  *
- * Deleting the other twenty would throw away work and options a user may want.
- * Presenting them as equivalent to the researched three would be dishonest.
- * So each preset declares its coverage, and the coverage travels with every
- * result the engine produces:
+ * The coverage distinction survives, and is still enforced, because the guard
+ * is what keeps a market from being added without the rules to back it:
  *
  *   MODELLED    a rule pack backs this, resolved by country, region, date and
  *               facts, with citations and a verification status
- *   LEGACY      the old flat-rate preset. Usable as a rough planning sketch,
- *               never presentable as a verified calculation, and the interface
- *               must say so
+ *   LEGACY      no rule pack. The engine computes nothing and the interface
+ *               renders a refusal rather than a number
  *
- * A LEGACY jurisdiction can never produce a "verified" result. That is enforced
- * in code rather than left to the interface to remember.
+ * A LEGACY jurisdiction can never produce a verified result. Adding a preset
+ * here without adding its rules produces an explicit unsupported result rather
+ * than a wrong one.
  */
 
 export const COVERAGE = Object.freeze({
@@ -85,10 +85,10 @@ const MODELLED = Object.freeze({
 });
 
 /**
- * Presets that exist but have no rule pack, with the reason stated plainly.
+ * Shown when a preset has no rule pack.
  *
- * The reason is shown to the user, so it says what is actually missing rather
- * than "unsupported".
+ * No shipped market reaches this today. It is the guard for one added without
+ * its rules, and it says what is actually missing rather than "unsupported".
  */
 const LEGACY_REASON =
   'This location has no researched rule pack. Its rates were entered by hand with no effective dates, '
@@ -111,15 +111,6 @@ const DEVOLVED_NOTE = Object.freeze({
  * Always returns a descriptor — never null — because the caller must be able
  * to render something honest for every preset, including the unmodelled ones.
  */
-/**
- * The blank template is a deliberately empty starting point, not a market with
- * unverified rates. Telling its user that "rates were entered by hand" is
- * simply untrue — there are no rates at all until they enter some.
- */
-const BLANK_REASON =
-  'This is a blank template with no rates in it. Every rate is yours to enter, and nothing here has been '
-  + 'checked against any source. The rule engine computes nothing for it.';
-
 export function jurisdictionFor(presetKey) {
   const modelled = MODELLED[presetKey];
   if (modelled) {
@@ -141,7 +132,7 @@ export function jurisdictionFor(presetKey) {
     knownGaps: Object.freeze([]),
     coverage: COVERAGE.LEGACY,
     note: null,
-    reason: presetKey === 'intl' ? BLANK_REASON : LEGACY_REASON,
+    reason: LEGACY_REASON,
   });
 }
 

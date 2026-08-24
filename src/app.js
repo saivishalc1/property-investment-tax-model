@@ -167,11 +167,10 @@ function buildPresetSelect() {
     const group = el('optgroup', { label: region });
     for (const [key, p] of Object.entries(PRESETS)) {
       if (p.region !== region) continue;
-      // Labelled by whether a researched rule pack backs the market, not by
-      // preset metadata — otherwise the dropdown says "(experimental)" for a
-      // market whose badge two lines below says "Rates checked".
-      const suffix = jurisdictionFor(key).coverage === COVERAGE.MODELLED ? ''
-        : p.status === 'blank' ? ' (blank template)' : ' (unresearched)';
+      // Every shipped market is backed by a researched rule pack, so there is
+      // no suffix to add. If one ever is not, jurisdictionFor() says so and the
+      // badge and warning below will both report it.
+      const suffix = jurisdictionFor(key).coverage === COVERAGE.MODELLED ? '' : ' (unresearched)';
       group.appendChild(el('option', { value: key, text: p.label + suffix }));
     }
     if (group.childElementCount) sel.appendChild(group);
@@ -783,11 +782,10 @@ function renderSources(preset) {
   // Driven by the rule registry rather than preset metadata, so this badge
   // cannot claim a check the engine did not actually perform.
   const modelled = jurisdictionFor(S.meta.preset).coverage === COVERAGE.MODELLED;
-  const badgeClass = modelled ? 'verified' : preset.status === 'blank' ? 'blank' : 'experimental';
   sb.appendChild(el('p', {}, [
     el('span', {
-      class: `badge ${badgeClass}`,
-      text: modelled ? 'Rates checked' : preset.status === 'blank' ? 'Blank template' : 'Experimental',
+      class: `badge ${modelled ? 'verified' : 'experimental'}`,
+      text: modelled ? 'Rates checked' : 'Unresearched market',
     }),
     ` ${preset.label} · tax year ${preset.taxYear} · rates checked ${preset.verified}`,
   ]));
@@ -1414,8 +1412,10 @@ function renderReportStep() {
   const reportModelled = jurisdictionFor(S.meta.preset).coverage === COVERAGE.MODELLED;
   const statusBox = el('p', {}, [
     el('span', {
-      class: `badge ${reportModelled ? 'verified' : preset.status === 'blank' ? 'blank' : 'experimental'}`,
-      text: reportModelled ? `Rates checked ${preset.verified}` : preset.status === 'blank' ? 'Blank template' : 'Experimental preset — unverified',
+      class: `badge ${reportModelled ? 'verified' : 'experimental'}`,
+      text: reportModelled
+        ? `Rates checked ${preset.verified}`
+        : 'Unresearched market — figures are an unverified sketch',
     }),
   ]);
   root.appendChild(statusBox);

@@ -179,13 +179,21 @@ statutory depreciation table, checked against the National Tax Agency and the
 Tokyo Metropolitan Bureau of Taxation). Scotland and Wales are declared
 unsupported rather than served the English tables.
 
-**Unresearched — everywhere else.** Presets for the UAE, Saudi Arabia, India,
-Spain, Portugal, France, Germany, the Netherlands, Singapore, Australia, Hong
-Kong, New Zealand, Canada, Mexico and Brazil are included, plus a blank
-template. Their rates were entered by hand with no effective dates, no
-citations and no verification. They are labelled **unresearched** in the
-interface, carry a permanent warning, and the rule engine computes nothing for
-them — it renders a refusal rather than a number.
+**Nothing else.** The product previously shipped presets for the UAE, Saudi
+Arabia, India, Spain, Portugal, France, Germany, the Netherlands, Singapore,
+Australia, Hong Kong, New Zealand, Canada, Mexico and Brazil, plus New York
+State, Florida, Texas and California, plus a blank template. None of them had a
+researched rule pack: their rates were entered by hand with no effective dates,
+no citations and no verification, and the engine computed nothing for them.
+
+They have been removed rather than kept behind a warning. A market a
+professional cannot show a client is not a market, and a dropdown of twenty-three
+options where three are trustworthy teaches the reader to ignore the label that
+tells them which. Every market now in the product is backed by primary sources.
+
+A scenario saved against one of the withdrawn markets is re-based on New York
+City when it loads — rates included, not just the label — and the interface says
+so rather than letting the substitution be discovered in a figure.
 
 > **A correction to an earlier claim.** This section previously said "the
 > engine is jurisdiction-neutral". It was not. `tablesFor()` in

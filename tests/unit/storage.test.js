@@ -114,15 +114,41 @@ test('a version 2 scenario keeps its transfer-tax payer settings', () => {
 test('migration drops unknown keys and repairs bad ones', () => {
   const s = migrate({
     schemaVersion: 3,
-    meta: { preset: 'not-a-real-preset', mode: 'hacker', name: 'X' },
+    meta: { preset: 'us-nyc', mode: 'hacker', name: 'X' },
     purchase: { price: 500000, evil: 'payload' },
     rates: { stateTransferRes: 'not an array', nonsense: 1 },
   });
-  assert.equal(s.meta.preset, 'us-nyc', 'an unknown preset falls back to New York City');
   assert.equal(s.meta.mode, 'quick', 'an unknown mode falls back to quick');
   assert.equal(s.purchase.evil, undefined);
   assert.equal(s.rates.nonsense, undefined);
-  assert.deepEqual(s.rates.stateTransferRes, []);
+  assert.deepEqual(s.rates.stateTransferRes, [], 'a malformed rate table is repaired');
+});
+
+test('a scenario saved for a withdrawn market is re-based, rates and all', () => {
+  // The label used to be reset while the saved rates were left alone, so a
+  // German scenario came back labelled "New York City" and still computing on
+  // euro rates. The label and the arithmetic must move together.
+  const s = migrate({
+    schemaVersion: 3,
+    meta: { preset: 'de', mode: 'quick', name: 'Berlin flat' },
+    purchase: { price: 500000 },
+    rates: { currency: '€', fedOrdinary: 42 },
+  });
+  assert.equal(s.meta.preset, 'us-nyc', 'a withdrawn market falls back to New York City');
+  assert.equal(s.rates.currency, '$', 'the rates moved with the label');
+  assert.notEqual(s.rates.fedOrdinary, 42, 'the German rate did not survive');
+  assert.equal(s.meta.enteredCurrency, 'USD');
+  assert.equal(s.meta.marketRemoved, 'de', 'the substitution is recorded so it can be reported');
+});
+
+test('a scenario on a market that still ships is left alone', () => {
+  const s = migrate({
+    schemaVersion: 3,
+    meta: { preset: 'jp', mode: 'quick', name: 'Tokyo' },
+    purchase: { price: 45000000 },
+  });
+  assert.equal(s.meta.preset, 'jp');
+  assert.equal(s.meta.marketRemoved, null, 'nothing was substituted');
 });
 
 test('bracket tables are coerced to numbers and sorted', () => {

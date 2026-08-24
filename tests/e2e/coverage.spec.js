@@ -13,8 +13,11 @@
 import { test, expect } from '@playwright/test';
 import { openApp, trackConsole } from './helpers.js';
 
+// Every market the product ships is researched. The unresearched markets were
+// removed rather than kept behind a caveat, so these tests now assert the
+// stronger property: there is no market in the dropdown that cannot be shown
+// to a client.
 const RESEARCHED = ['us-nyc', 'uk', 'jp'];
-const UNRESEARCHED = ['de', 'fr', 'us-tx', 'us-fl', 'sg'];
 
 async function selectMarket(page, key) {
   await page.locator('[data-step="property"]').click();
@@ -36,24 +39,28 @@ test.describe('coverage is consistent across every surface', () => {
     }
   });
 
-  test('an unresearched market says so on the badge AND in the dropdown', async ({ page }) => {
+  test('the dropdown offers ONLY researched markets', async ({ page }) => {
     await openApp(page);
-    for (const key of UNRESEARCHED) {
-      await selectMarket(page, key);
-      await expect(page.locator('#presetStatusLine')).toContainText('Experimental preset');
-      await expect(page.locator('#presetStatusLine')).toContainText('no researched rule pack');
-      const label = await page.locator('#f-preset option:checked').innerText();
-      expect(label).toMatch(/unresearched/i);
+    const values = await page.locator('#f-preset option').evaluateAll(
+      (opts) => opts.map((o) => o.value).filter(Boolean),
+    );
+    expect(values.sort()).toEqual(['jp', 'uk', 'us-nyc']);
+
+    // And none of them is labelled unresearched or experimental.
+    const labels = await page.locator('#f-preset option').allInnerTexts();
+    for (const label of labels) {
+      expect(label).not.toMatch(/unresearched|experimental|blank template/i);
     }
   });
 
-  test('Texas and Florida warn, which the old prefix test never did', async ({ page }) => {
-    // The previous rule warned only when the preset id did NOT start with
-    // "us-", so every unresearched United States market was silently trusted.
+  test('the region groups match the markets, with no empty group', async ({ page }) => {
     await openApp(page);
-    for (const key of ['us-tx', 'us-fl', 'us-ca']) {
-      await selectMarket(page, key);
-      await expect(page.locator('#warningSummary')).toContainText('no researched rule pack');
+    const groups = await page.locator('#f-preset optgroup').evaluateAll(
+      (gs) => gs.map((g) => ({ label: g.label, count: g.querySelectorAll('option').length })),
+    );
+    expect(groups.length).toBeGreaterThan(0);
+    for (const g of groups) {
+      expect(g.count, `group "${g.label}" must not be empty`).toBeGreaterThan(0);
     }
   });
 
@@ -84,14 +91,35 @@ test.describe('sourced transaction taxes', () => {
     await expect(link).toHaveAttribute('rel', /noopener/);
   });
 
-  test('an unresearched market renders a refusal, not a number', async ({ page }) => {
+  test('no shipped market renders a refusal', async ({ page }) => {
     await openApp(page);
     await page.locator('#modePro').click();
-    await selectMarket(page, 'de');
+    for (const key of RESEARCHED) {
+      await selectMarket(page, key);
+      await expect(page.locator('#engineTaxPanel'))
+        .not.toContainText('No checked rules for this market');
+    }
+  });
 
+  test('a market that charges on the price cites its source; Japan explains why it cannot yet', async ({ page }) => {
+    await openApp(page);
+    await page.locator('#modePro').click();
+
+    // The United Kingdom and New York charge on the consideration, so the
+    // charges compute and carry a citation with an access date.
+    for (const key of ['uk', 'us-nyc']) {
+      await selectMarket(page, key);
+      await expect(page.locator('#engineTaxPanel')).toContainText('read 2026-08-23');
+    }
+
+    // Japan charges on the assessed value on the tax roll, which the scenario
+    // does not yet collect. The right answer is to exclude the charge and say
+    // what is needed — not to levy it on the purchase price.
+    await selectMarket(page, 'jp');
     const panel = page.locator('#engineTaxPanel');
-    await expect(panel).toContainText('No checked rules for this market');
-    await expect(panel).not.toContainText('Total');
+    await expect(panel).toContainText('incomplete');
+    await expect(panel).toContainText('assessed value on the tax roll');
+    await expect(panel).toContainText('Enter that figure to include the charge');
   });
 
   test('an incomplete total is labelled incomplete and explains why', async ({ page }) => {
@@ -139,7 +167,6 @@ test.describe('the residency switch actually changes the tax', () => {
       ['us-nyc', 'US tax resident'],
       ['uk', 'UK tax resident'],
       ['jp', 'Japan tax resident'],
-      ['de', 'Tax resident where the property is'],
     ];
     for (const [key, expected] of cases) {
       await selectMarket(page, key);
@@ -153,7 +180,7 @@ test('switching between every market raises no console errors', async ({ page })
   const errors = trackConsole(page);
   await openApp(page);
   await page.locator('#modePro').click();
-  for (const key of [...RESEARCHED, ...UNRESEARCHED, 'intl']) {
+  for (const key of RESEARCHED) {
     await selectMarket(page, key);
   }
   expect(errors).toEqual([]);
@@ -205,13 +232,18 @@ test.describe('help text is written for the market being modelled', () => {
 });
 
 test.describe('the printed report cannot overclaim', () => {
-  test('an unresearched market does not print "Rates checked"', async ({ page }) => {
+  test('every market prints the authority its rules were read from', async ({ page }) => {
     await openApp(page);
-    await selectMarket(page, 'us-tx');
-    await page.locator('[data-step="report"]').click();
-    const meta = page.locator('.report-meta');
-    await expect(meta).toContainText('No researched rule pack');
-    await expect(meta).not.toContainText('Rates checked');
+    for (const [key, authority] of [
+      ['us-nyc', 'IRS'], ['uk', 'HM Revenue'], ['jp', 'National Tax Agency'],
+    ]) {
+      await selectMarket(page, key);
+      await page.locator('[data-step="report"]').click();
+      const meta = page.locator('.report-meta');
+      await expect(meta).toContainText('Rules read from');
+      await expect(meta).toContainText(authority);
+      await expect(meta).not.toContainText('unverified sketch');
+    }
   });
 
   test('a researched market prints its charges with a citation and access date', async ({ page }) => {

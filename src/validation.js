@@ -170,6 +170,16 @@ export function validate(state) {
   // both directions: it flagged the United Kingdom and Japan, which now have
   // researched packs, and stayed silent on Texas, Florida and California,
   // which have none.
+  // A scenario saved against a market that has since been withdrawn was
+  // re-based on load. The user needs to know their figures moved.
+  if (state.meta && state.meta.marketRemoved) {
+    warnings.push(
+      `This scenario was saved for a market ("${state.meta.marketRemoved}") that is no longer offered, `
+      + 'because it had no researched rule pack. It has been re-based on New York City and the rates '
+      + 'replaced. Check every figure before relying on it.',
+    );
+  }
+
   const coverage = jurisdictionFor(state.meta.preset);
 
   // Money figures are not converted when the market changes, by design — the

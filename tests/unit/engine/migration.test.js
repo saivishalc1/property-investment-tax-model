@@ -21,9 +21,12 @@ import { computeModel } from '../../../src/calculations.js';
 function scenarioFor(preset, over = {}) {
   const s = defaultState();
   s.meta.preset = preset;
-  s.rates = structuredClone(PRESETS[preset].rates);
-  Object.assign(s.purchase, { price: PRESETS[preset].sample.price }, over.purchase || {});
-  Object.assign(s.hold, { rentMo: PRESETS[preset].sample.rentMo }, over.hold || {});
+  // An unresearched key has no preset to draw rates from; New York's shape is
+  // used purely so the cash-flow machinery has numbers to run on.
+  s.rates = structuredClone((PRESETS[preset] || PRESETS['us-nyc']).rates);
+  const sample = (PRESETS[preset] || PRESETS['us-nyc']).sample;
+  Object.assign(s.purchase, { price: sample.price }, over.purchase || {});
+  Object.assign(s.hold, { rentMo: sample.rentMo }, over.hold || {});
   Object.assign(s.profile, over.profile || {});
   return s;
 }
@@ -33,8 +36,12 @@ describe('The rule engine owns the tax figures for a researched market', () => {
     for (const k of ['us-nyc', 'uk', 'jp']) {
       assert.equal(computeModel(scenarioFor(k)).meta.engine, true, `${k} uses the engine`);
     }
-    assert.equal(computeModel(scenarioFor('de')).meta.engine, false, 'Germany has no pack');
-    assert.equal(computeModel(scenarioFor('de')).meta.engineStatus, 'unsupported');
+    // Every SHIPPED market is researched. The unresearched path is still a
+    // live guard, so it is exercised with a key that is deliberately not a
+    // market rather than with whichever preset happens to be unresearched
+    // today — a test that would rot the moment the market list changed.
+    assert.equal(computeModel(scenarioFor('zz-nowhere')).meta.engine, false);
+    assert.equal(computeModel(scenarioFor('zz-nowhere')).meta.engineStatus, 'unsupported');
   });
 
   test('the marginal rate differs by country instead of being one US figure', () => {
@@ -87,7 +94,7 @@ describe('The rule engine owns the tax figures for a researched market', () => {
   test('the reported breakdown always sums to the reported total', () => {
     // A statement whose parts do not add up to its own total is a defect the
     // reader will find before we do.
-    for (const k of ['us-nyc', 'uk', 'jp', 'de']) {
+    for (const k of ['us-nyc', 'uk', 'jp', 'zz-nowhere']) {
       const s = computeModel(scenarioFor(k)).sale;
       const sum = s.fedRecaptureTax + s.fedCapGainsTax + s.niitTax + s.stateGainTax + s.cityGainTax;
       assert.ok(

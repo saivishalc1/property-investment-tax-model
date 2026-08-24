@@ -312,20 +312,6 @@ test('turning off NYC residency removes the city tax from rent and gain alike', 
   assert.ok(b.sale.netProceeds > a.sale.netProceeds);
 });
 
-test('New York State outside the city has no city transfer tax and no city income tax', () => {
-  const s = defaultState();
-  s.meta.preset = 'us-nys';
-  s.purchase.price = 1200000; // above the $1M mansion-tax threshold
-  s.rates = structuredClone(PRESETS['us-nys'].rates);
-  const r = computeModel(s);
-  assert.equal(r.purchase.cityTransfer, 0);
-  assert.equal(r.sale.cityGainTax, 0);
-  assert.ok(r.purchase.stateTransfer > 0);
-  assert.ok(r.purchase.mansionTax > 0, 'the 1% state mansion tax still applies above $1M');
-  // The additional 0.25% base tax on high-value conveyances is NYC-only.
-  close(r.purchase.stateTransfer, 1200000 * 0.4 / 100, 0.01);
-});
-
 /* ---------------- sale proceeds ---------------- */
 
 test('sale proceeds reconcile line by line', () => {

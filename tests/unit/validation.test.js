@@ -104,7 +104,7 @@ test('warnings flag modelled-but-caveated assumptions without blocking the run',
 test('a market with no researched rule pack always warns', () => {
   // Germany, France, Texas and the rest carry hand-entered rates with no
   // effective dates and no citations. Every one of them must say so.
-  for (const preset of ['de', 'fr', 'us-tx', 'us-fl', 'sg']) {
+  for (const preset of ['zz-nowhere', 'xx-unknown']) {
     const s = defaultState();
     s.meta.preset = preset;
     const warnings = validate(s).warnings;
@@ -134,7 +134,7 @@ test('the old us- prefix test warned on exactly the wrong markets', () => {
   // A regression guard for the specific defect: the previous rule keyed off
   // whether the preset id began with "us-", so Texas and Florida — which have
   // no rule pack — were silently trusted while the UK was flagged.
-  const tx = defaultState(); tx.meta.preset = 'us-tx';
+  const tx = defaultState(); tx.meta.preset = 'zz-nowhere';
   assert.ok(validate(tx).warnings.some((w) => /no researched rule pack/i.test(w)));
 
   const uk = defaultState(); uk.meta.preset = 'uk';
