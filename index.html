@@ -23,7 +23,7 @@
 <link rel="icon" href="./assets/favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="./assets/icon-180.png">
 <link rel="manifest" href="./assets/site.webmanifest">
-<link rel="stylesheet" href="./src/styles.css?v=491e25358d">
+<link rel="stylesheet" href="./src/styles.css?v=d24704aad5">
 </head>
 <body>
 
@@ -228,6 +228,11 @@
         <h3>Transaction taxes at this price</h3>
         <div class="table-scroll" tabindex="0"><table id="buyTaxTable"></table></div>
         <details class="how"><summary>How calculated</summary><div class="formula" id="buyTaxFormula"></div></details>
+
+        <!-- Charges computed from the versioned rule packs, with their sources
+             and an explicit statement when the total is known to be incomplete.
+             Populated by renderEngineTransactionTaxes() in app.js. -->
+        <section class="engine-panel" id="engineTaxPanel" aria-label="Transaction taxes computed from the published rules"></section>
       </div>
 
       <p class="mode-note" data-mode="quick" id="modeNote-property"></p>
@@ -1011,6 +1016,6 @@
   </div>
 </noscript>
 
-<script type="module" src="./src/app.js?v=491e25358d"></script>
+<script type="module" src="./src/app.js?v=d24704aad5"></script>
 </body>
 </html>

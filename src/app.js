@@ -10,6 +10,9 @@
 
 import { computeModel, computeVariant, num } from './calculations.js';
 import { PRESETS, REGIONS } from './presets.js';
+import { Money, formatMoney } from './core/money.js';
+import { jurisdictionFor, COVERAGE } from './engine/jurisdiction.js';
+import { computeTransactionTaxes } from './engine/transactions.js';
 import { validate } from './validation.js';
 import * as store from './storage.js';
 
@@ -163,7 +166,11 @@ function buildPresetSelect() {
     const group = el('optgroup', { label: region });
     for (const [key, p] of Object.entries(PRESETS)) {
       if (p.region !== region) continue;
-      const suffix = p.status === 'checked' ? '' : p.status === 'blank' ? ' (blank template)' : ' (experimental)';
+      // Labelled by whether a researched rule pack backs the market, not by
+      // preset metadata — otherwise the dropdown says "(experimental)" for a
+      // market whose badge two lines below says "Rates checked".
+      const suffix = jurisdictionFor(key).coverage === COVERAGE.MODELLED ? ''
+        : p.status === 'blank' ? ' (blank template)' : ' (unresearched)';
       group.appendChild(el('option', { value: key, text: p.label + suffix }));
     }
     if (group.childElementCount) sel.appendChild(group);
@@ -395,17 +402,98 @@ function renderCashFlowChart(host, flows) {
  * Rendering — per step
  * ================================================================== */
 
+/**
+ * Transaction taxes for the current scenario, computed from the rule registry.
+ *
+ * Returns null for a market with no researched rule pack, which is the signal
+ * the interface uses to refuse to show a verified figure.
+ */
+function engineTransactionTaxes(side) {
+  const j = jurisdictionFor(S.meta.preset);
+  if (j.coverage !== COVERAGE.MODELLED) return null;
+  const price = side === 'acquisition' ? num(S.purchase.price) : results.sale.salePrice;
+  if (!(price > 0)) return null;
+  try {
+    return computeTransactionTaxes(S, {
+      side,
+      consideration: Money.of(String(Math.round(price)), j.currency),
+      on: new Date().toISOString().slice(0, 10),
+    });
+  } catch (err) {
+    // A currency or shape mismatch is a programming error, not a user error.
+    // Surface it rather than silently degrading to the legacy figures.
+    console.error('engineTransactionTaxes', err);
+    return null;
+  }
+}
+
+/**
+ * The coverage notice.
+ *
+ * This replaces a badge driven by hand-maintained preset metadata with one
+ * driven by whether a researched rule pack actually backs the market. The old
+ * badge could say "Rates checked" for a market the engine was computing with
+ * New York's tables, because nothing connected the claim to the calculation.
+ */
+function renderCoverageNotice(line, preset) {
+  const j = jurisdictionFor(S.meta.preset);
+
+  // The word "verified" is deliberately avoided here. A rule marked verified in
+  // the packs means it was read against a primary source — a DOCUMENTARY check.
+  // On a badge, "verified" reads as professionally reviewed, which nothing here
+  // has been. The distinction is the project's standing rule and is asserted by
+  // the end-to-end suite.
+  if (j.coverage !== COVERAGE.MODELLED) {
+    line.appendChild(el('span', { class: 'badge experimental', text: 'Experimental preset' }));
+    line.appendChild(document.createTextNode(' '));
+    line.appendChild(document.createTextNode(j.reason));
+    return;
+  }
+
+  line.appendChild(el('span', { class: 'badge verified', text: 'Rates checked' }));
+  line.appendChild(document.createTextNode(' '));
+  line.appendChild(document.createTextNode(
+    `Tax year ${preset.taxYear}. Read from ${j.authority}. `
+    + 'A documentary check against the published rules, not a professional review. '));
+  if (j.note) line.appendChild(document.createTextNode(j.note));
+}
+
+/**
+ * Label the residency switch for the market being modelled.
+ *
+ * "US tax resident" is meaningless when the property is in Tokyo. The control
+ * is the same fact — is the investor tax resident where the property is — so
+ * only its wording changes.
+ */
+function renderResidencyLabel() {
+  // The input is a SIBLING of .switch-text, not a descendant, so closest()
+  // from the input finds nothing. Address the label directly.
+  const label = $('label[for="f-usTaxResident"]');
+  const help = $('#f-usTaxResident')?.closest('.switch-row')?.querySelector('.switch-text .help');
+  if (!label) return;
+  const j = jurisdictionFor(S.meta.preset);
+
+  const wording = {
+    'us-nyc': ['US tax resident', 'FIRPTA withholding and treaty relief for non-residents are not modelled.'],
+    uk: ['UK tax resident', 'A non-resident buyer pays a further 2% SDLT surcharge on residential property. Residence for SDLT is tested on presence in the UK for at least 183 days in the 12 months before the purchase.'],
+    jp: ['Japan tax resident', 'A non-resident seller is subject to 10.21% withholding on the gross price at disposal; that withholding is not modelled.'],
+  }[S.meta.preset];
+
+  if (wording) {
+    label.textContent = wording[0];
+    if (help) help.textContent = wording[1];
+  } else {
+    label.textContent = 'Tax resident where the property is';
+    if (help) help.textContent = 'Residency changes the rate in most jurisdictions. This market has no researched rule pack, so the switch does not change the figures.';
+  }
+}
+
 function renderPropertyStep() {
   const preset = PRESETS[S.meta.preset] || PRESETS['us-nyc'];
   const line = $('#presetStatusLine');
   clear(line);
-  const badgeClass = preset.status === 'checked' ? 'verified' : preset.status === 'blank' ? 'blank' : 'experimental';
-  const badgeText = preset.status === 'checked' ? `Rates checked ${preset.verified}`
-    : preset.status === 'blank' ? 'Blank template' : 'Experimental preset';
-  line.appendChild(el('span', { class: `badge ${badgeClass}`, text: badgeText }));
-  line.appendChild(document.createTextNode(' '));
-  line.appendChild(document.createTextNode(
-    `Tax year ${preset.taxYear}. Rates last checked ${preset.verified}.`));
+  renderCoverageNotice(line, preset);
+  renderResidencyLabel();
 
   const p = results.purchase;
   const labels = preset.labels || {};
@@ -418,6 +506,13 @@ function renderPropertyStep() {
     { label: 'Rate applied to the loan', value: pct(p.mrtRate, 3), kind: 'sub' },
     { label: 'Transaction taxes you pay at closing', value: money(p.buyerTransfer + p.mansionTax + p.mortgageRecordingTax), kind: 'total' },
   ], S.purchase.propType === 'coop' ? 'Co-op shares are personal property, so mortgage recording tax and title insurance do not apply.' : null, true);
+
+  // --- registry-computed transaction taxes ---------------------------
+  // Rendered from the rule packs rather than the flat preset rates, with each
+  // charge's source and payer, and an explicit statement when the total is
+  // known to be incomplete. For a market with no rule pack this renders a
+  // refusal instead of a number.
+  renderEngineTransactionTaxes('acquisition');
 
   const marginalNote = S.rates.marginalBrackets
     ? 'Brackets are marginal: each slice of price is taxed at its own rate.'
@@ -432,6 +527,92 @@ function renderPropertyStep() {
     `loan = price × (1 − ${pct(num(S.purchase.downPct))} down) = ${money(p.loan)}`,
     `${labels.mrt || 'Mortgage recording tax'} = loan × ${pct(p.mrtRate, 3)} = ${money(p.mortgageRecordingTax)}`,
   ]);
+}
+
+/**
+ * Render the registry-computed transaction taxes beneath the legacy table.
+ *
+ * Deliberately shown ALONGSIDE the old figures during the migration rather
+ * than replacing them silently: where the two disagree, the reader can see
+ * that they disagree, and the sourced one says where its numbers came from.
+ */
+function renderEngineTransactionTaxes(side) {
+  const host = $('#engineTaxPanel');
+  if (!host) return;
+  clear(host);
+
+  const j = jurisdictionFor(S.meta.preset);
+  if (j.coverage !== COVERAGE.MODELLED) {
+    const box = el('div', { class: 'callout warn' });
+    box.appendChild(el('h4', { text: 'No checked rules for this market' }));
+    box.appendChild(el('p', { text: j.reason }));
+    host.appendChild(box);
+    return;
+  }
+
+  const r = engineTransactionTaxes(side);
+  if (!r) return;
+
+  const rows = r.charges.map((c) => ({
+    label: c.label,
+    value: formatMoney(c.amount),
+    sub: `payable by the ${c.payer}`,
+  }));
+
+  const table = el('table');
+  host.appendChild(table);
+  renderTable(
+    table,
+    'Transaction taxes, computed from the published rules',
+    [
+      ...rows.map((x) => ({ label: x.label, value: x.value })),
+      {
+        label: r.complete ? 'Total' : 'Total (incomplete — see below)',
+        value: formatMoney(r.total),
+        kind: 'total',
+      },
+    ],
+    null,
+    true,
+  );
+
+  if (!r.complete) {
+    const box = el('div', { class: 'callout warn mt-md' });
+    box.appendChild(el('h4', { text: 'This total is not the whole bill' }));
+    const ul = el('ul');
+    for (const item of [...r.unsupported, ...r.incomplete]) {
+      ul.appendChild(el('li', { text: item.reason }));
+    }
+    box.appendChild(ul);
+    host.appendChild(box);
+  }
+
+  // Sources, so a figure can be checked rather than trusted.
+  const seen = new Set();
+  const cites = [];
+  for (const c of r.charges) {
+    for (const cite of c.citations) {
+      const key = cite.url || cite.title;
+      if (!seen.has(key)) { seen.add(key); cites.push(cite); }
+    }
+  }
+  if (cites.length) {
+    const src = el('div', { class: 'sources mt-md' });
+    src.appendChild(el('h4', { text: 'Sources' }));
+    const ul = el('ul');
+    for (const c of cites) {
+      const li = el('li');
+      if (c.url) {
+        li.appendChild(el('a', { href: c.url, rel: 'noopener noreferrer', target: '_blank', text: c.title }));
+      } else {
+        li.appendChild(document.createTextNode(c.title));
+      }
+      li.appendChild(document.createTextNode(` — ${c.publisher}, read ${c.accessed}`));
+      ul.appendChild(li);
+    }
+    src.appendChild(ul);
+    host.appendChild(src);
+  }
 }
 
 function renderFinancingStep() {
@@ -514,6 +695,7 @@ let rateFieldsBuiltFor = null;
 let bracketEditorsBuiltFor = null;
 
 function renderProfileStep() {
+  renderResidencyLabel();
   const preset = PRESETS[S.meta.preset] || PRESETS['us-nyc'];
   const labels = preset.labels || {};
 
@@ -590,11 +772,14 @@ function syncDynamic(root) {
 function renderSources(preset) {
   const sb = $('#sourcesBlock');
   clear(sb);
-  const badgeClass = preset.status === 'checked' ? 'verified' : preset.status === 'blank' ? 'blank' : 'experimental';
+  // Driven by the rule registry rather than preset metadata, so this badge
+  // cannot claim a check the engine did not actually perform.
+  const modelled = jurisdictionFor(S.meta.preset).coverage === COVERAGE.MODELLED;
+  const badgeClass = modelled ? 'verified' : preset.status === 'blank' ? 'blank' : 'experimental';
   sb.appendChild(el('p', {}, [
     el('span', {
       class: `badge ${badgeClass}`,
-      text: preset.status === 'checked' ? 'Rates checked' : preset.status === 'blank' ? 'Blank template' : 'Experimental',
+      text: modelled ? 'Rates checked' : preset.status === 'blank' ? 'Blank template' : 'Experimental',
     }),
     ` ${preset.label} · tax year ${preset.taxYear} · rates checked ${preset.verified}`,
   ]));
@@ -1209,10 +1394,11 @@ function renderReportStep() {
     `${preset.label} · ${propTypeLabel()} · Generated ${dateLong(new Date().toISOString())} · Tax year ${preset.taxYear} · Rates checked ${preset.verified} · Model schema v${store.SCHEMA_VERSION}`));
   root.appendChild(meta);
 
+  const reportModelled = jurisdictionFor(S.meta.preset).coverage === COVERAGE.MODELLED;
   const statusBox = el('p', {}, [
     el('span', {
-      class: `badge ${preset.status === 'checked' ? 'verified' : preset.status === 'blank' ? 'blank' : 'experimental'}`,
-      text: preset.status === 'checked' ? `Rates checked ${preset.verified}` : preset.status === 'blank' ? 'Blank template' : 'Experimental preset — unverified',
+      class: `badge ${reportModelled ? 'verified' : preset.status === 'blank' ? 'blank' : 'experimental'}`,
+      text: reportModelled ? `Rates checked ${preset.verified}` : preset.status === 'blank' ? 'Blank template' : 'Experimental preset — unverified',
     }),
   ]);
   root.appendChild(statusBox);

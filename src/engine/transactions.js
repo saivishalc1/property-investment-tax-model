@@ -57,7 +57,15 @@ export function factsFromScenario(scenario) {
   return {
     propertyClass,
     ownership: profile.ownerType === 'company' ? OWNERSHIP.COMPANY : OWNERSHIP.INDIVIDUAL,
-    residency: profile.taxResident === false ? RESIDENCY.NON_RESIDENT : RESIDENCY.RESIDENT,
+    // The interface already carries a residency switch (profile.usTaxResident).
+    // It was bound to the DOM but read by nothing — calculations.js never
+    // referenced it — so toggling it changed no number on the screen. It now
+    // means "tax resident in the country being modelled" and drives the
+    // residency-dependent rules, which in the United Kingdom is worth two
+    // percentage points on every SDLT band.
+    residency: (profile.taxResident ?? profile.usTaxResident) === false
+      ? RESIDENCY.NON_RESIDENT
+      : RESIDENCY.RESIDENT,
     // This product models investment property, so the buyer is assumed to own
     // another residential property unless they say otherwise. In the United
     // Kingdom that is worth five points on every SDLT band.

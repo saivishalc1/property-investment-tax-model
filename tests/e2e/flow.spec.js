@@ -175,9 +175,15 @@ test.describe('core flow', () => {
     // The word "verified" on its own overstates what was done; it must not appear.
     await expect(status).not.toContainText(/verified/i);
 
+    // The United Kingdom now has a researched rule pack, so it is no longer
+    // experimental. Germany still has none, and must still say so.
     await page.locator('#f-preset').selectOption('uk');
+    await expect(status).toContainText('Rates checked');
+    await expect(status).toContainText('HM Revenue');
+
+    await page.locator('#f-preset').selectOption('de');
     await expect(status).toContainText('Experimental preset');
-    await expect(page.locator('#warningSummary')).toContainText('experimental preset');
+    await expect(status).toContainText('no researched rule pack');
   });
 
   test('the tax profile states exactly what was and was not checked', async ({ page }) => {

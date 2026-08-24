@@ -16,6 +16,8 @@
  * left exactly as typed.
  */
 
+import { jurisdictionFor, COVERAGE } from './engine/jurisdiction.js';
+
 const RULES = [
   // path,                  label,                          min,   max,     required
   ['purchase.price', 'Purchase price', 1, 1e12, true],
@@ -163,9 +165,24 @@ export function validate(state) {
   if (Number(p.units) > 1 && state.purchase.propType === 'coop') {
     warnings.push('Co-op ownership is share-based, so a multi-unit co-op is unusual. Check the unit count.');
   }
-  if (state.meta.preset && !String(state.meta.preset).startsWith('us-')) {
-    warnings.push('This is an experimental preset. Rates are researched but unverified and several local rules cannot be expressed by this engine.');
+  // Whether a market is researched is decided by the rule registry, not by
+  // whether its key happens to begin with "us-". That prefix test was wrong in
+  // both directions: it flagged the United Kingdom and Japan, which now have
+  // researched packs, and stayed silent on Texas, Florida and California,
+  // which have none.
+  const coverage = jurisdictionFor(state.meta.preset);
+  if (coverage.coverage !== COVERAGE.MODELLED) {
+    warnings.push(
+      'This market has no researched rule pack. Its rates were entered by hand with no effective dates, '
+      + 'no source citations and no verification. Treat any figure as a rough sketch, not a calculation '
+      + 'you can rely on or show a client.',
+    );
   }
+  // A modelled market's scope note (which regions it covers, what is not yet
+  // entered) is SCOPE, not a caveat about this scenario. It belongs on the
+  // market badge and in the report's sources section, where it is already
+  // shown. Pushing it here would make the default scenario warn every time and
+  // train the user to skim past the warnings that do need action.
 
   return { errors, warnings };
 }

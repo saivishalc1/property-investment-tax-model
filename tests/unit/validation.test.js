@@ -101,10 +101,44 @@ test('warnings flag modelled-but-caveated assumptions without blocking the run',
   assert.ok(warnings.some((w) => /§469/.test(w)));
 });
 
-test('experimental presets always warn', () => {
-  const s = defaultState();
-  s.meta.preset = 'uk';
-  assert.ok(validate(s).warnings.some((w) => /experimental/i.test(w)));
+test('a market with no researched rule pack always warns', () => {
+  // Germany, France, Texas and the rest carry hand-entered rates with no
+  // effective dates and no citations. Every one of them must say so.
+  for (const preset of ['de', 'fr', 'us-tx', 'us-fl', 'sg']) {
+    const s = defaultState();
+    s.meta.preset = preset;
+    const warnings = validate(s).warnings;
+    assert.ok(
+      warnings.some((w) => /no researched rule pack/i.test(w)),
+      `${preset} must warn that it is unresearched`,
+    );
+  }
+});
+
+test('a researched market does not carry the unresearched warning', () => {
+  // The United Kingdom and Japan now have packs checked against HMRC and the
+  // NTA. Warning about them alongside Germany would flatten the distinction
+  // the coverage model exists to make.
+  for (const preset of ['us-nyc', 'uk', 'jp']) {
+    const s = defaultState();
+    s.meta.preset = preset;
+    const warnings = validate(s).warnings;
+    assert.ok(
+      !warnings.some((w) => /no researched rule pack/i.test(w)),
+      `${preset} is researched and must not be flagged unresearched`,
+    );
+  }
+});
+
+test('the old us- prefix test warned on exactly the wrong markets', () => {
+  // A regression guard for the specific defect: the previous rule keyed off
+  // whether the preset id began with "us-", so Texas and Florida — which have
+  // no rule pack — were silently trusted while the UK was flagged.
+  const tx = defaultState(); tx.meta.preset = 'us-tx';
+  assert.ok(validate(tx).warnings.some((w) => /no researched rule pack/i.test(w)));
+
+  const uk = defaultState(); uk.meta.preset = 'uk';
+  assert.ok(!validate(uk).warnings.some((w) => /no researched rule pack/i.test(w)));
 });
 
 test('corporate ownership warns that entity-level tax is out of scope', () => {

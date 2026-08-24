@@ -916,3 +916,37 @@ dialog::backdrop { background: rgba(10, 12, 16, .55); }
   font-family: var(--serif); font-size: var(--step1);
   color: var(--text-2); margin: 0 0 var(--sp1);
 }
+
+/* ------------------------------------------------------------------ *
+ * Registry-computed transaction taxes
+ * ------------------------------------------------------------------ *
+ * Set apart from the legacy table above it, because during the migration the
+ * two are shown together and the reader needs to see which one carries
+ * sources. No decoration beyond the rule that separates the two blocks.
+ */
+.engine-panel {
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--line);
+}
+
+.engine-panel .sources {
+  font-size: var(--step-1);
+  color: var(--text-3);
+}
+
+.engine-panel .sources h4 {
+  margin: 0 0 0.35rem;
+  font-size: var(--step-1);
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.engine-panel .sources ul {
+  margin: 0;
+  padding-left: 1.25rem;
+}
+
+.engine-panel .sources li + li {
+  margin-top: 0.25rem;
+}
