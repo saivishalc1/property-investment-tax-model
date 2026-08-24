@@ -12,18 +12,18 @@
      Pages cannot do; see README § Security. -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'none'; form-action 'none'; base-uri 'none'; object-src 'none'; manifest-src 'self'">
 <title>Property Investment Tax Model — New York investment property planner</title>
-<meta name="description" content="A deterministic, offline planning model for New York investment property: purchase and transfer taxes, financing, rental operations, depreciation, passive losses, taxable sale, §1031 comparison, ROI and after-tax IRR.">
+<meta name="description" content="A deterministic, offline planning model for investment property in New York, England and Japan: transfer and acquisition taxes, financing, rental operations, depreciation, taxable sale, ROI and after-tax IRR. Rules are versioned and cited.">
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#f7f7f5" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#101113" media="(prefers-color-scheme: dark)">
 <meta name="robots" content="index, follow">
 <meta property="og:title" content="Property Investment Tax Model">
-<meta property="og:description" content="Deterministic New York investment-property tax and returns planner. Runs entirely in your browser.">
+<meta property="og:description" content="Deterministic investment-property tax and returns planner for New York, England and Japan. Runs entirely in your browser.">
 <meta property="og:type" content="website">
 <link rel="icon" href="./assets/favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="./assets/icon-180.png">
 <link rel="manifest" href="./assets/site.webmanifest">
-<link rel="stylesheet" href="./src/styles.css?v=3db23f7203">
+<link rel="stylesheet" href="./src/styles.css?v=9ccdee2c8d">
 </head>
 <body>
 
@@ -279,7 +279,7 @@
             <label><input type="radio" name="buyTransfer" value="seller" data-bind-radio="purchase.transferTaxPayer"> <span id="buyTransferSellerLabel">Seller (standard in New York)</span></label>
             <label><input type="radio" name="buyTransfer" value="buyer" data-bind-radio="purchase.transferTaxPayer"> Buyer</label>
           </div>
-          <p class="help">On new construction and sponsor sales the buyer usually absorbs the New York State and New York City transfer tax. When the buyer pays, it capitalises into your cost basis.</p>
+          <p class="help" id="buyTransferHelp">On new construction and sponsor sales the buyer usually absorbs the New York State and New York City transfer tax. When the buyer pays, it capitalises into your cost basis.</p>
         </fieldset>
       </div>
 
@@ -648,7 +648,7 @@
         </div>
 
         <div class="field" data-mode="pro" hidden>
-          <div class="switch-row">
+          <div class="switch-row" id="passiveLossRow">
             <span class="switch-text">
               <label for="f-passiveAllowed">Deduct rental losses in the year they arise</label>
               <span class="help">Usually off. Under US §469 a rental loss is passive: it is suspended and carried forward, then released in full when you sell. Turn this on only if you qualify as a real estate professional or have offsetting passive income.</span>
@@ -679,7 +679,7 @@
         </fieldset>
 
         <div class="field">
-          <div class="switch-row">
+          <div class="switch-row" id="activeParticipationRow">
             <span class="switch-text">
               <label for="f-activeParticipation">I actively participate in this rental</label>
               <span class="help">Approving tenants, setting rents, arranging repairs. It unlocks the §469(i) allowance: up to $25,000 of rental losses deductible now instead of suspended, phasing out between $100,000 and $150,000 of income.</span>
@@ -708,7 +708,7 @@
           </div>
         </div>
         <div class="field">
-          <div class="switch-row">
+          <div class="switch-row" id="fullDispositionRow">
             <span class="switch-text">
               <label for="f-fullDisposition">Fully taxable disposition to an unrelated buyer</label>
               <span class="help">Required by §469(g) before suspended losses are released on sale.</span>
@@ -717,7 +717,7 @@
           </div>
         </div>
         <div class="field">
-          <div class="switch-row">
+          <div class="switch-row" id="niitRow">
             <span class="switch-text">
               <label for="f-niitOnRental">Apply the net investment income tax to rental income</label>
               <span class="help">Net rental income is investment income under §1411. Turn off if you materially participate in a real property trade or business.</span>
@@ -729,7 +729,7 @@
 
       <div class="callout info" data-mode="quick">
         <h4 id="quickRatesHeading">Using the standard New York rates</h4>
-        <p>Quick estimate applies the published federal, New York State and New York City rates for tax year 2026. To type in your own rates instead, switch to <strong>Professional</strong> at the top of the page.</p>
+        <p id="quickRatesBody">Standard view applies the published rates for this market. To type in your own rates instead, switch to <strong>Detailed</strong> at the top of the page.</p>
       </div>
 
       <div class="card" data-mode="pro" hidden>
@@ -988,7 +988,7 @@
         <div class="table-scroll" tabindex="0"><table id="priceCompare" class="compare-table"></table></div>
       </div>
 
-      <div class="card">
+      <div class="card" id="exchangeSection">
         <h3>Taxable sale versus a §1031 exchange</h3>
         <p class="card-hint">A like-kind exchange defers the tax on the gain into the replacement property. It does not eliminate it, and it does not release suspended passive losses.</p>
         <div class="table-scroll" tabindex="0"><table id="exchangeCompare" class="compare-table"></table></div>
@@ -1057,6 +1057,6 @@
   </div>
 </noscript>
 
-<script type="module" src="./src/app.js?v=3db23f7203"></script>
+<script type="module" src="./src/app.js?v=9ccdee2c8d"></script>
 </body>
 </html>

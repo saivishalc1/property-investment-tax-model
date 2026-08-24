@@ -17,7 +17,7 @@ import { PRESETS, REGIONS } from './presets.js';
 import { Money, formatMoney } from './core/money.js';
 import { jurisdictionFor, COVERAGE } from './engine/jurisdiction.js';
 import { computeTransactionTaxes } from './engine/transactions.js';
-import { applyCopy } from './engine/copy.js';
+import { applyCopy, isUnitedStates } from './engine/copy.js';
 import * as workspace from './workspace.js';
 import { validate } from './validation.js';
 import * as store from './storage.js';
@@ -763,7 +763,7 @@ function renderProfileStep() {
     el('div', { class: 'switch-row' }, [
       el('span', { class: 'switch-text' }, [
         el('label', { for: 'r-marginal', text: 'Transaction-tax brackets are marginal' }),
-        el('span', { class: 'help', text: 'Off means the whole price is taxed at one bracket rate, the way the New York mansion tax and the NYC transfer tax work. On means slice by slice, the way UK stamp duty works.' }),
+        el('span', { class: 'help', text: 'Off means the whole value is taxed at the rate of the highest band it reaches — a cliff, where one unit over a threshold re-rates everything. On means slice by slice, where each band taxes only its own portion.' }),
       ]),
       el('input', { type: 'checkbox', class: 'switch', id: 'r-marginal', 'data-bind': 'rates.marginalBrackets' }),
     ]),
@@ -811,8 +811,13 @@ function renderSources(preset) {
     const ul = el('ul');
     const label = { primary: 'read from the government source itself', secondary: 'from corroborating secondary sources', provisional: 'provisional', none: 'none' };
     ul.appendChild(el('li', { text: `Transfer, mansion, RPTT and mortgage recording taxes — ${label[v.transferAndTransactionTaxes] || v.transferAndTransactionTaxes}` }));
-    ul.appendChild(el('li', { text: `Federal rates, thresholds and §469 rules — ${label[v.federalIncomeAndGains] || v.federalIncomeAndGains}` }));
-    ul.appendChild(el('li', { text: `New York State and City bracket thresholds — ${label[v.newYorkIncomeBrackets] || v.newYorkIncomeBrackets}` }));
+    // The verification keys differ by market, so the list is built from what
+    // the preset actually declares rather than from a fixed set of US labels.
+    for (const [key, level] of Object.entries(v)) {
+      if (key === 'professionalReview') continue;
+      const readable = key.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase());
+      ul.appendChild(el('li', { text: `${readable} — ${label[level] || level}` }));
+    }
     ul.appendChild(el('li', { text: 'Review by a CPA, attorney or enrolled agent — none' }));
     box.appendChild(ul);
     sb.appendChild(box);
@@ -1078,11 +1083,14 @@ function renderResultsStep() {
     `cash-on-cash    = year 1 pre-tax cash flow ÷ cash invested = ${money(h.year1.preTaxCF)} ÷ ${money(p.cashAtClosing)} = ${pct(rt.cashOnCash)}`,
     '',
     h.useBrackets
-      ? `Income tax on the rental is the tax this property ADDS to your bill: your other income of ${money(num(S.profile.otherMAGI))} is the base, and the rental result stacks on top of it through the federal, New York State and New York City schedules. That works out to ${pct(h.ordinaryRate)} on the next dollar — not the ${pct(h.flatOrdinaryRate)} top-of-scale figure.`
+      ? `Income tax on the rental is the tax this property ADDS to your bill: your other income of ${money(num(S.profile.otherMAGI))} is the base, and the rental result stacks on top of it through the schedules in force for ${jurisdictionFor(S.meta.preset).label || 'this market'}. That works out to ${pct(h.ordinaryRate)} on the next dollar — not the ${pct(h.flatOrdinaryRate)} top-of-scale figure.`
       : `Flat-rate mode: a combined ordinary rate of ${pct(h.flatOrdinaryRate)} = federal ${pct(num(S.rates.fedOrdinary))} + state ${pct(num(S.rates.stateOrdinary))} + city ${pct(h.cityOrdinaryRate)}.`,
-    S.profile.nycResident ? '' : '  (no city tax: you are not a New York City resident)',
+    isUnitedStates(S.meta.preset) && !S.profile.nycResident
+      ? '  (no city tax: you are not a New York City resident)' : '',
     h.allowanceCap > 0
-      ? `§469(i) special allowance available this year: ${money(h.allowanceCap)}. Rental losses up to that amount are deductible now rather than suspended.`
+      ? (isUnitedStates(S.meta.preset)
+        ? `§469(i) special allowance available this year: ${money(h.allowanceCap)}. Rental losses up to that amount are deductible now rather than suspended.`
+        : '')
       : '',
   ]);
 
@@ -1116,8 +1124,10 @@ function renderResultsStep() {
     { label: 'Deducted each year', value: money(h.annualFinancingDeduction) },
     { label: 'Remaining balance deducted at sale', value: money(h.unamortisedFinancingAtSale) },
     { kind: 'group', label: 'Passive losses' },
-    { label: S.hold.passiveAllowed ? 'Losses deducted as they arise' : 'Losses suspended under §469' , value: S.hold.passiveAllowed ? 'Yes' : 'Yes' },
-    { label: '§469(i) allowance available each year', value: money(h.allowanceCap) },
+    ...(isUnitedStates(S.meta.preset) ? [
+      { label: S.hold.passiveAllowed ? 'Losses deducted as they arise' : 'Losses suspended under §469', value: 'Yes' },
+      { label: '§469(i) allowance available each year', value: money(h.allowanceCap) },
+    ] : []),
     { label: 'Losses deducted now under that allowance', value: money(h.allowanceUsedTotal), cls: h.allowanceUsedTotal ? 'pos' : '' },
     { label: 'Suspended losses carried to the sale', value: money(h.suspendedAtSale) },
     { label: 'Released on a fully taxable disposition', value: money(s.releasedLosses) },
@@ -1127,7 +1137,8 @@ function renderResultsStep() {
   renderFormula($('#depFormula'), [
     `depreciable basis = cost basis − land = ${money(p.costBasis)} − ${money(p.landValue)} = ${money(p.depreciableBasis)}`,
     `annual deduction  = ${money(p.depreciableBasis)} ÷ ${h.depLife} = ${money(h.annualDep)}`,
-    `year 1 fraction   = (12 − ${S.profile.serviceMonth} + 0.5) ÷ 12 = ${h.placedFraction.toFixed(4)}   (IRS mid-month convention)`,
+    `year 1 fraction   = (12 − ${S.profile.serviceMonth} + 0.5) ÷ 12 = ${h.placedFraction.toFixed(4)}`
+      + (isUnitedStates(S.meta.preset) ? '   (IRS mid-month convention)' : ''),
     `year 1 deduction  = ${money(h.annualDep)} × ${h.placedFraction.toFixed(4)} = ${money(h.annualDep * h.placedFraction)}`,
     `sale year fraction= (${S.sale.saleMonth} − 0.5) ÷ 12 = ${h.saleFraction.toFixed(4)}`,
     '',
@@ -1137,7 +1148,9 @@ function renderResultsStep() {
     '',
     S.hold.passiveAllowed
       ? 'Rental losses are being deducted in the year they arise, so nothing accumulates for release at sale.'
-      : `Rental losses are passive under §469, so they are suspended and carried forward. ${money(h.suspendedAtSale)} remains at the sale and is released in full, worth ${money(s.releasedLossTaxBenefit)} at ${pct(h.ordinaryRate)}.`,
+      : (isUnitedStates(S.meta.preset)
+        ? `Rental losses are passive under §469, so they are suspended and carried forward. ${money(h.suspendedAtSale)} remains at the sale and is released in full, worth ${money(s.releasedLossTaxBenefit)} at ${pct(h.ordinaryRate)}.`
+        : `A rental loss of ${money(h.suspendedAtSale)} is carried forward. How it may be relieved depends on this market's rules and is not modelled.`),
   ]);
 
   // ---- sale ----
@@ -1159,7 +1172,9 @@ function renderResultsStep() {
     { label: 'Adjusted basis', value: money(s.adjustedBasis), kind: 'total' },
     { kind: 'group', label: 'Gain' },
     { label: 'Total gain', value: money(s.totalGain), kind: 'total', cls: signClass(s.totalGain) },
-    { label: 'Of which unrecaptured §1250 gain (depreciation)', value: money(s.unrecaptured), kind: 'sub' },
+    ...(isUnitedStates(S.meta.preset)
+      ? [{ label: 'Of which unrecaptured §1250 gain (depreciation)', value: money(s.unrecaptured), kind: 'sub' }]
+      : []),
     { label: 'Of which long-term capital gain', value: money(s.capitalGain), kind: 'sub' },
     { kind: 'group', label: 'Proceeds' },
     { label: 'Loan payoff', value: money(-s.loanPayoff), cls: 'neg' },
@@ -1178,27 +1193,47 @@ function renderResultsStep() {
     `total gain      = ${money(s.amountRealized)} − ${money(s.adjustedBasis)} = ${money(s.totalGain)}`,
     '',
     `Depreciation comes out of the gain first, capped at the amount actually taken:`,
-    `  unrecaptured §1250 = min(${money(s.accumDep)}, ${money(Math.max(0, s.totalGain))}) = ${money(s.unrecaptured)}`,
+    isUnitedStates(S.meta.preset)
+      ? `  unrecaptured §1250 = min(${money(s.accumDep)}, ${money(Math.max(0, s.totalGain))}) = ${money(s.unrecaptured)}`
+      : '',
     `  capital gain       = ${money(Math.max(0, s.totalGain))} − ${money(s.unrecaptured)} = ${money(s.capitalGain)}`,
     '',
     `gross proceeds  = amount realised − loan payoff = ${money(s.amountRealized)} − ${money(s.loanPayoff)} = ${money(s.grossProceeds)}`,
     `net proceeds    = ${money(s.grossProceeds)} − ${money(s.totalSaleTax)} tax + ${money(s.releasedLossTaxBenefit)} released losses = ${money(s.netProceeds)}`,
   ]);
 
-  // ---- sale tax ----
-  renderTable($('#saleTaxTable'), 'Tax on the sale, by component', [
+  /* ---- sale tax ----
+   * The rows come from the ENGINE'S OWN component labels where it computed
+   * them, because those are already in the right language for the market:
+   * "長期譲渡所得 — national income tax" for Tokyo, "Capital Gains Tax" for
+   * London. The previous fixed rows named section 1250, the NIIT and New York
+   * State on a Japanese sale, which is a statement about the law and it was
+   * the wrong law. */
+  const engineRows = (s.engineComponents || []).map((c) => ({
+    label: c.label,
+    value: money(c.amount.amount.toNumberLossy()),
+  }));
+
+  const saleTaxRows = engineRows.length ? engineRows : [
     { label: `Depreciation recapture (§1250) — ${money(s.unrecaptured)} at ${pct(s.effectiveRecaptureRate)}`, value: money(s.fedRecaptureTax) },
     { label: `Federal capital gains — ${money(s.capitalGain)} at ${pct(s.effectiveCapGainsRate)}`, value: money(s.fedCapGainsTax) },
     { label: `Net investment income tax — ${money(s.niitBase)} at ${pct(num(S.rates.niit))}`, value: money(s.niitTax) },
-    { label: `New York State — ${money(s.taxableGain)} at ${pct(s.effectiveStateRate)}`, value: money(s.stateGainTax) },
-    { label: `New York City — ${money(s.taxableGain)} at ${pct(s.effectiveCityRate)}`, value: money(s.cityGainTax) },
+    { label: `Regional tax on the gain — ${money(s.taxableGain)} at ${pct(s.effectiveStateRate)}`, value: money(s.stateGainTax) },
+    { label: `Municipal tax on the gain — ${money(s.taxableGain)} at ${pct(s.effectiveCityRate)}`, value: money(s.cityGainTax) },
+  ];
+
+  renderTable($('#saleTaxTable'), 'Tax on the sale, by component', [
+    ...saleTaxRows,
     { label: 'Total tax on the sale', value: money(s.totalSaleTax), kind: 'total' },
     { label: 'Effective rate on the gain', value: pct(s.effectiveGainRate), kind: 'sub' },
-    { kind: 'group', label: 'Separately, at your ordinary rate' },
-    { label: `Released passive losses — ${money(s.releasedLosses)} at ${pct(h.ordinaryRate)}`, value: money(-s.releasedLossTaxBenefit), cls: 'pos' },
-  ], 'Transaction taxes on the sale (transfer tax, flip tax) sit in selling costs above, not here — they reduce the gain rather than being levied on it.', true);
+    ...(isUnitedStates(S.meta.preset) && s.releasedLosses > 0 ? [
+      { kind: 'group', label: 'Separately, at your ordinary rate' },
+      { label: `Released passive losses — ${money(s.releasedLosses)} at ${pct(h.ordinaryRate)}`, value: money(-s.releasedLossTaxBenefit), cls: 'pos' },
+    ] : []),
+  ], 'Transaction taxes on the sale (transfer tax, stamp duty, flip tax) sit in selling costs above, not here — they reduce the gain rather than being levied on it.', true);
 
-  renderFormula($('#saleTaxFormula'), [
+  renderFormula($('#saleTaxFormula'), isUnitedStates(S.meta.preset) ? [
+
     `NIIT threshold for ${filingLabel()} = ${money(s.niitThreshold)}`,
     `MAGI before this property = ${money(num(S.profile.otherMAGI))}`,
     `NIIT base = min(gain, MAGI + gain − threshold)`,
@@ -1210,11 +1245,23 @@ function renderResultsStep() {
       ? `New York City tax applies at ${pct(s.cityGainRate)} because you are a city resident.`
       : 'New York City tax is zero because you are not a city resident. New York State tax still applies to New York-source gain.',
     '',
+    '',
     `Each tax has its own base. Recapture applies to ${money(s.unrecaptured)} only; the long-term rate applies only to the ${money(s.capitalGain)} above it. New York has no preferential capital gains rate, so the whole gain runs through its ordinary schedule.`,
     '',
     h.useBrackets
-      ? `Rates are worked out from your income, not from a single top rate. Your other income of ${money(num(S.profile.otherMAGI))} is the starting point; this property's income and gain stack on top of it and run through the ${results.meta.taxYear || 2026} schedules. Unrecaptured §1250 gain is taxed at ordinary rates capped at 25% — the cap is a ceiling, not a flat rate, so ${pct(s.effectiveRecaptureRate)} is what actually applies here.`
+      ? `Rates are worked out from your income, not from a single top rate. Your other income of ${money(num(S.profile.otherMAGI))} is the starting point; this property's income and gain stack on top of it and run through the ${results.meta.taxYear || 2026} schedules.`
+        + (isUnitedStates(S.meta.preset)
+          ? ` Unrecaptured §1250 gain is taxed at ordinary rates capped at 25% — the cap is a ceiling, not a flat rate, so ${pct(s.effectiveRecaptureRate)} is what actually applies here.`
+          : '')
       : `Flat-rate mode: one marginal rate is applied to everything, using the rates you entered. This overstates the tax for anyone below the top bracket.`,
+  ] : [
+    ...(s.engineComponents || []).map((c) =>
+      `${c.label} = ${money(c.amount.amount.toNumberLossy())}`),
+    '',
+    `Total tax on the sale = ${money(s.totalSaleTax)}`,
+    `Effective rate on the gain = ${pct(s.effectiveGainRate)}`,
+    '',
+    'Each component is computed from the rule cited beside it. Transaction taxes on the sale sit in selling costs, not here.',
   ]);
 
   // ---- returns ----
@@ -1401,7 +1448,18 @@ function renderReportStep() {
     return el('div', { class: 'table-scroll', tabindex: '0' }, [t]);
   };
 
-  root.appendChild(el('h2', { text: S.meta.name || 'Property investment analysis' }));
+  /*
+   * The report heading.
+   *
+   * S.meta.name is the SCENARIO's name and defaults to "New York City
+   * investment property", so a Japanese report was titled after New York
+   * unless the owner had renamed it. The address is what identifies the
+   * property everywhere else, so it leads here too.
+   */
+  const reportName = String(S.purchase.address || '').trim()
+    || (S.meta.name && S.meta.name !== store.defaultState().meta.name ? S.meta.name : '')
+    || 'Property investment analysis';
+  root.appendChild(el('h2', { text: reportName }));
   const addr = String(S.purchase.address || '').trim();
   if (addr) root.appendChild(el('p', { class: 'report-address', text: addr }));
   const meta = el('p', { class: 'report-meta' });
@@ -1436,10 +1494,17 @@ function renderReportStep() {
     kvTable('Investor', [
       { label: 'Filing status', value: filingLabel() },
       { label: 'Other income (MAGI)', value: money(num(S.profile.otherMAGI)) },
-      { label: 'New York City resident', value: S.profile.nycResident ? 'Yes' : 'No' },
+      ...(isUnitedStates(S.meta.preset)
+        ? [{ label: 'New York City resident', value: S.profile.nycResident ? 'Yes' : 'No' }]
+        : [{ label: 'Tax resident where the property is', value: (S.profile.taxResident ?? S.profile.usTaxResident) === false ? 'No' : 'Yes' }]),
       { label: 'Ownership', value: ownerLabel() },
       { label: 'Combined ordinary rate', value: pct(h.ordinaryRate) },
-      { label: 'Rental losses', value: S.hold.passiveAllowed ? 'Deducted as they arise' : 'Suspended under §469' },
+      {
+        label: 'Rental losses',
+        value: isUnitedStates(S.meta.preset)
+          ? (S.hold.passiveAllowed ? 'Deducted as they arise' : 'Suspended under §469')
+          : (S.hold.passiveAllowed ? 'Deducted as they arise' : 'Carried forward'),
+      },
     ]),
     kvTable('Property', [
       { label: 'Purchase price', value: money(p.price) },
@@ -1483,20 +1548,35 @@ function renderReportStep() {
       { label: 'Amount realised', value: money(s.amountRealized) },
       { label: 'Adjusted basis', value: money(s.adjustedBasis) },
       { label: 'Total gain', value: money(s.totalGain), kind: 'total' },
-      { label: 'Unrecaptured §1250 gain', value: money(s.unrecaptured) },
+      ...(isUnitedStates(S.meta.preset)
+        ? [{ label: 'Unrecaptured §1250 gain', value: money(s.unrecaptured) }] : []),
       { label: 'Long-term capital gain', value: money(s.capitalGain) },
       { label: 'Loan payoff', value: money(s.loanPayoff) },
       { label: 'Net proceeds', value: money(s.netProceeds), kind: 'total' },
     ]),
+    /*
+     * The tax breakdown uses the ENGINE'S component labels where it computed
+     * them, so a Japanese report reads 長期譲渡所得 and 住民税 rather than
+     * "Federal capital gains" and "New York State" — which are not merely the
+     * wrong words, they name taxes that do not apply to the property.
+     */
     kvTable('Tax', [
       { label: 'Transfer and transaction taxes', value: money(rt.transactionTaxes) },
       { label: 'Income tax during the hold', value: money(h.cumHoldTax) },
-      { label: 'Depreciation recapture', value: money(s.fedRecaptureTax) },
-      { label: 'Federal capital gains', value: money(s.fedCapGainsTax) },
-      { label: 'Net investment income tax', value: money(s.niitTax) },
-      { label: 'New York State', value: money(s.stateGainTax) },
-      { label: 'New York City', value: money(s.cityGainTax) },
-      { label: 'Benefit of released losses', value: money(-s.releasedLossTaxBenefit) },
+      ...((s.engineComponents || []).length
+        ? s.engineComponents.map((c) => ({
+          label: c.label,
+          value: money(c.amount.amount.toNumberLossy()),
+        }))
+        : [
+          { label: 'Depreciation recapture', value: money(s.fedRecaptureTax) },
+          { label: 'Capital gains tax', value: money(s.fedCapGainsTax) },
+          { label: 'Investment income surtax', value: money(s.niitTax) },
+          { label: 'Regional tax on the gain', value: money(s.stateGainTax) },
+          { label: 'Municipal tax on the gain', value: money(s.cityGainTax) },
+        ]),
+      ...(isUnitedStates(S.meta.preset)
+        ? [{ label: 'Benefit of released losses', value: money(-s.releasedLossTaxBenefit) }] : []),
       { label: 'Total tax paid', value: money(rt.totalTaxPaid), kind: 'total' },
     ]),
   ]));
@@ -1527,8 +1607,11 @@ function renderReportStep() {
     })));
   section('Scenario comparison', el('div', { class: 'table-scroll', tabindex: '0' }, [holdTable]));
 
+  // A like-kind exchange is a United States relief with no analogue in the UK
+  // or Japan. Printing it in a British report would offer a deferral that does
+  // not exist there.
   const x = results.exchange;
-  section('Taxable sale versus §1031 exchange', kvTable('Comparison', [
+  if (isUnitedStates(S.meta.preset)) section('Taxable sale versus §1031 exchange', kvTable('Comparison', [
     { label: 'Tax paid on a taxable sale', value: money(s.totalSaleTax) },
     { label: 'Tax deferred by exchanging', value: money(x.taxesDeferred) },
     { label: 'Equity if you sell', value: money(x.equityIfSold) },

@@ -257,3 +257,76 @@ test.describe('the printed report cannot overclaim', () => {
     await expect(main).toContainText('read 2026-08-23');
   });
 });
+
+test.describe('No United States tax concept reaches a UK or Japanese screen', () => {
+  // Each of these is a United States statute, agency or currency. Showing any
+  // of them on a British or Japanese analysis is not a wording slip — it is a
+  // statement about the law, made in the same voice as the numbers, and the
+  // reader has no way to tell which parts of the page were localised.
+  const US_ONLY = [
+    { re: /§469\b/, what: 'section 469 passive losses' },
+    { re: /§1031\b/, what: 'section 1031 exchanges' },
+    { re: /§1250\b/, what: 'section 1250 recapture' },
+    { re: /§1411\b/, what: 'the net investment income tax' },
+    { re: /FIRPTA/, what: 'FIRPTA withholding' },
+    { re: /\bIRS\b/, what: 'the IRS' },
+    { re: /MACRS/, what: 'MACRS' },
+    { re: /New York/, what: 'New York' },
+    { re: /\$\d/, what: 'a dollar amount' },
+  ];
+
+  for (const market of ['uk', 'jp']) {
+    test(`${market}: every step is free of US concepts and of USD`, async ({ page }) => {
+      await openApp(page);
+      await page.locator('#f-preset').selectOption(market);
+      await page.locator('#f-address').fill('Locale check');
+      await page.locator('#modePro').click();
+      await page.waitForTimeout(400);
+
+      const steps = ['property', 'financing', 'operations', 'profile', 'sale', 'results', 'compare', 'report'];
+      const found = [];
+
+      for (const step of steps) {
+        await page.locator(`[data-step="${step}"]`).click();
+        // Expand the content disclosures: anything inside a closed one is not
+        // rendered, so leaving them shut would let a leak hide behind a
+        // collapsed panel. The results dock is excluded — it is a fixed bottom
+        // bar on mobile and opening it covers the step navigation.
+        await page.evaluate(() => {
+          document.querySelectorAll('.result-detail, details.how')
+            .forEach((d) => { d.open = true; });
+        });
+        await page.waitForTimeout(120);
+
+        // The market <select> legitimately names every market, including New
+        // York. It is taken out of the reading, not out of the page.
+        const text = await page.evaluate(() => {
+          const sel = document.querySelector('#f-preset');
+          if (sel) sel.style.display = 'none';
+          const t = document.querySelector('main').innerText;
+          if (sel) sel.style.display = '';
+          return t;
+        });
+
+        for (const { re, what } of US_ONLY) {
+          if (re.test(text)) found.push(`${step}: ${what}`);
+        }
+      }
+
+      expect(found, `US concepts visible in the ${market} market`).toEqual([]);
+    });
+  }
+
+  test('New York keeps its own statutes, which are correct there', async ({ page }) => {
+    // The gating must be by jurisdiction, not by deletion.
+    await openApp(page);
+    await page.locator('#modePro').click();
+    await page.locator('[data-step="profile"]').click();
+    await expect(page.locator('main')).toContainText('§469');
+    await page.locator('[data-step="results"]').click();
+    await page.evaluate(() => {
+      document.querySelectorAll('.result-detail, details.how').forEach((d) => { d.open = true; });
+    });
+    await expect(page.locator('main')).toContainText('§1250');
+  });
+});

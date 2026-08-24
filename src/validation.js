@@ -150,7 +150,11 @@ export function validate(state) {
     warnings.push('The hold period exceeds the 27.5-year residential recovery period, so depreciation stops before the sale.');
   }
   if (h.passiveAllowed) {
-    warnings.push('Rental losses are being deducted in the year they arise. Under US §469 most individual investors must suspend them instead.');
+    // Section 469 is a United States statute. Warning a British or Japanese
+    // investor that they may be breaking it is a statement about the wrong law.
+    if (String(state.meta.preset || '').startsWith('us-')) {
+      warnings.push('Rental losses are being deducted in the year they arise. Under US §469 most individual investors must suspend them instead.');
+    }
   }
   if (Number(p.landPct) === 0) {
     warnings.push('A 0% land share depreciates the entire purchase price. Land is never depreciable; a typical NYC allocation is 20–30%.');

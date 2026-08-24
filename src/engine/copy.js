@@ -41,6 +41,14 @@ const COPY = {
     'f-serviceMonth-help': 'The IRS mid-month convention gives you half a month of depreciation in the month it is first available to rent.',
     'f-capexMonth-help': 'The IRS mid-month convention treats it as placed in service halfway through this month.',
     nycResidentRow: true,
+    // Sections 469, 469(i), 469(g) and 1411 are United States statutes.
+    passiveLossRow: true,
+    activeParticipationRow: true,
+    fullDispositionRow: true,
+    niitRow: true,
+    exchangeSection: true,
+    buyTransferHelp: 'On new construction and sponsor sales the buyer usually absorbs the New York State and New York City transfer tax. When the buyer pays, it capitalises into your cost basis.',
+    'tip-land': 'Land never wears out, so it cannot be depreciated. Only the building portion of your cost basis generates a depreciation deduction. Your property tax assessment usually shows a land and improvement split; 20–30% is typical in New York City.',
   },
 
   uk: {
@@ -52,6 +60,16 @@ const COPY = {
     'f-capexMonth-help': 'Used for the depreciation timing in this model. Capital expenditure on a UK residential let is generally added to base cost for capital gains rather than deducted.',
     // Stamp Duty Land Tax is always paid by the buyer; there is no election.
     nycResidentRow: false,
+    // No United States statute applies to a British property. Showing a
+    // passive-loss switch that changes nothing is worse than not showing it:
+    // it implies the model is applying a rule it is not.
+    passiveLossRow: false,
+    activeParticipationRow: false,
+    fullDispositionRow: false,
+    niitRow: false,
+    exchangeSection: false,
+    buyTransferHelp: 'SDLT is payable by the buyer. There is no election, and it is not deductible against rental income — it forms part of your base cost for capital gains.',
+    'tip-land': 'An individual landlord gets no depreciation on a UK building, so the land share does not affect a UK figure. It is kept because it still describes the property.',
   },
 
   jp: {
@@ -59,6 +77,13 @@ const COPY = {
     buyTransferSellerLabel: 'Seller',
     sellTransferSellerLabel: 'You, the seller',
     quickRatesHeading: 'Using the published Japanese rates',
+    passiveLossRow: false,
+    activeParticipationRow: false,
+    fullDispositionRow: false,
+    niitRow: false,
+    exchangeSection: false,
+    buyTransferHelp: 'Acquisition tax and registration tax are payable by the buyer, and are charged on the assessed value on the tax roll rather than the price.',
+    'tip-land': 'Only the building is depreciated in Japan; land is not. The building share drives the annual allowance over the statutory useful life for its structure.',
     'f-serviceMonth-help': 'Japan depreciates from the month the asset is placed in service; there is no mid-month convention.',
     'f-capexMonth-help': 'Japan depreciates from the month the improvement is placed in service; there is no mid-month convention.',
     nycResidentRow: false,
@@ -71,6 +96,13 @@ const UNRESEARCHED = {
   buyTransferSellerLabel: 'Seller',
   sellTransferSellerLabel: 'You, the seller',
   quickRatesHeading: 'Using the preset’s rates',
+  passiveLossRow: false,
+  activeParticipationRow: false,
+  fullDispositionRow: false,
+  niitRow: false,
+  exchangeSection: false,
+  buyTransferHelp: 'Who pays a transfer tax differs by country and has not been checked for this market.',
+  'tip-land': 'Only the building portion of a cost basis is depreciated where depreciation is available at all.',
   'f-serviceMonth-help': 'Used for the depreciation timing in this model. Whether it matches local law here has not been checked.',
   'f-capexMonth-help': 'Used for the depreciation timing in this model. Whether it matches local law here has not been checked.',
   nycResidentRow: false,
