@@ -67,6 +67,26 @@ jobs:
       - name: Every rule must carry provenance, and none may be stale
         run: node tools/check-rules.js
 
+      - name: Every rule must be named by a test
+        # A rule nobody tests can be changed without anything noticing, which
+        # is how a rate silently drifts. The report is generated from the packs
+        # and the test files, so this cannot be satisfied by editing a document.
+        run: |
+          node tools/coverage-report.js | tee coverage.txt
+          if grep -qE '^[0-9]+ rule\(s\) have no test naming them' coverage.txt; then
+            echo "::error::Some rules have no test naming them."
+            exit 1
+          fi
+
+      - name: The committed coverage report must match the code
+        run: |
+          node tools/coverage-report.js --markdown > /tmp/COVERAGE.md
+          if ! diff -q /tmp/COVERAGE.md COVERAGE.md >/dev/null; then
+            echo "::error::COVERAGE.md is out of date. Run 'npm run coverage:md' and commit."
+            diff /tmp/COVERAGE.md COVERAGE.md | head -40
+            exit 1
+          fi
+
   security:
     name: Dependency and secret scanning
     runs-on: ubuntu-latest

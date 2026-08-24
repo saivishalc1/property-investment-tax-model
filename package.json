@@ -12,8 +12,10 @@
     "serve:subpath": "node tools/serve.js 4174 /property-investment-tax-model",
     "build": "node tools/version.js && node tools/build.js",
     "bundle": "node tools/bundle.js",
-    "check": "npm run build && npm test && npm run check:rules",
-    "check:rules": "node tools/check-rules.js"
+    "check": "npm run build && npm test && npm run check:rules && npm run coverage",
+    "check:rules": "node tools/check-rules.js",
+    "coverage": "node tools/coverage-report.js",
+    "coverage:md": "node tools/coverage-report.js --markdown > COVERAGE.md"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.10.0",
