@@ -13,6 +13,7 @@ import { PRESETS, REGIONS } from './presets.js';
 import { Money, formatMoney } from './core/money.js';
 import { jurisdictionFor, COVERAGE } from './engine/jurisdiction.js';
 import { computeTransactionTaxes } from './engine/transactions.js';
+import { applyCopy } from './engine/copy.js';
 import { validate } from './validation.js';
 import * as store from './storage.js';
 
@@ -494,6 +495,9 @@ function renderPropertyStep() {
   clear(line);
   renderCoverageNotice(line, preset);
   renderResidencyLabel();
+  // Rewrite the jurisdiction-dependent help text. Without this the page tells
+  // a UK user about §469, FIRPTA and 27.5-year depreciation lives.
+  applyCopy(S.meta.preset, $);
 
   const p = results.purchase;
   const labels = preset.labels || {};
@@ -1390,8 +1394,17 @@ function renderReportStep() {
   const addr = String(S.purchase.address || '').trim();
   if (addr) root.appendChild(el('p', { class: 'report-address', text: addr }));
   const meta = el('p', { class: 'report-meta' });
+  // The provenance clause is CONDITIONAL. It previously read "Rates checked
+  // <date>" for every market, so a Texas report — a market with no researched
+  // rules at all — asserted a check in the client's hands while the badge two
+  // lines below said "Experimental preset". A printed deliverable is the last
+  // place an unearned claim should survive.
+  const reportJ = jurisdictionFor(S.meta.preset);
+  const provenance = reportJ.coverage === COVERAGE.MODELLED
+    ? `Rules read from ${reportJ.authority}`
+    : 'No researched rule pack — figures are an unverified sketch';
   meta.appendChild(document.createTextNode(
-    `${preset.label} · ${propTypeLabel()} · Generated ${dateLong(new Date().toISOString())} · Tax year ${preset.taxYear} · Rates checked ${preset.verified} · Model schema v${store.SCHEMA_VERSION}`));
+    `${preset.label} · ${propTypeLabel()} · Generated ${dateLong(new Date().toISOString())} · Tax year ${preset.taxYear} · ${provenance} · Model schema v${store.SCHEMA_VERSION}`));
   root.appendChild(meta);
 
   const reportModelled = jurisdictionFor(S.meta.preset).coverage === COVERAGE.MODELLED;
@@ -1402,6 +1415,9 @@ function renderReportStep() {
     }),
   ]);
   root.appendChild(statusBox);
+
+  // kvTable is a local of renderReportStep, so it is passed in explicitly.
+  renderReportSourcedTaxes(section, kvTable);
 
   section('Investor and property assumptions', el('div', { class: 'report-cols' }, [
     kvTable('Investor', [
@@ -1543,6 +1559,75 @@ function renderReportStep() {
  * — what it is, what it costs per unit of area, what it yields, whether it
  * covers its debt — so it sits above everything and never moves.
  */
+/**
+ * The sourced transaction charges, inside the printed report.
+ *
+ * The registry figures existed on screen but never reached the deliverable, so
+ * a client received the legacy numbers with no statement of where any of them
+ * came from. A report that cannot be checked against a source is the thing
+ * this product is supposed to replace.
+ */
+function renderReportSourcedTaxes(section, kvTable) {
+  const j = jurisdictionFor(S.meta.preset);
+  if (j.coverage !== COVERAGE.MODELLED) {
+    section('Transaction taxes', el('div', {}, [
+      el('p', { text: j.reason }),
+    ]));
+    return;
+  }
+
+  const buy = engineTransactionTaxes('acquisition');
+  const sell = engineTransactionTaxes('disposal');
+  if (!buy && !sell) return;
+
+  const body = el('div');
+  for (const [label, r] of [['On purchase', buy], ['On sale', sell]]) {
+    if (!r || (!r.charges.length && r.complete)) continue;
+    const rows = r.charges.map((c) => ({
+      label: `${c.label} (paid by the ${c.payer})`,
+      value: formatMoney(c.amount),
+    }));
+    rows.push({
+      label: r.complete ? 'Total' : 'Total — incomplete',
+      value: formatMoney(r.total),
+      kind: 'total',
+    });
+    body.appendChild(kvTable(label, rows));
+
+    if (!r.complete) {
+      const ul = el('ul', { class: 'report-caveats' });
+      for (const item of [...r.unsupported, ...r.incomplete]) {
+        ul.appendChild(el('li', { text: item.reason }));
+      }
+      body.appendChild(ul);
+    }
+  }
+
+  // Citations, so every figure above can be checked rather than trusted.
+  const seen = new Set();
+  const cites = [];
+  for (const r of [buy, sell]) {
+    for (const c of (r?.charges || [])) {
+      for (const cite of c.citations) {
+        const key = cite.url || cite.title;
+        if (!seen.has(key)) { seen.add(key); cites.push(cite); }
+      }
+    }
+  }
+  if (cites.length) {
+    const ul = el('ul', { class: 'report-sources' });
+    for (const c of cites) {
+      ul.appendChild(el('li', {
+        text: `${c.title} — ${c.publisher}${c.url ? ` (${c.url})` : ''}, read ${c.accessed}`,
+      }));
+    }
+    body.appendChild(el('h4', { text: 'Where these transaction figures come from' }));
+    body.appendChild(ul);
+  }
+
+  section('Transaction taxes, from the published rules', body);
+}
+
 function renderDealStrip() {
   const { purchase: p, hold: h, returns: rt } = results;
   $('#dealName').textContent = String(S.purchase.address || '').trim() || 'Untitled property';

@@ -23,7 +23,7 @@
 <link rel="icon" href="./assets/favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="./assets/icon-180.png">
 <link rel="manifest" href="./assets/site.webmanifest">
-<link rel="stylesheet" href="./src/styles.css?v=d24704aad5">
+<link rel="stylesheet" href="./src/styles.css?v=12f10d2547">
 </head>
 <body>
 
@@ -217,7 +217,7 @@
         <fieldset>
           <legend>Who pays the transfer tax at purchase?</legend>
           <div class="radio-row">
-            <label><input type="radio" name="buyTransfer" value="seller" data-bind-radio="purchase.transferTaxPayer"> Seller (standard in New York)</label>
+            <label><input type="radio" name="buyTransfer" value="seller" data-bind-radio="purchase.transferTaxPayer"> <span id="buyTransferSellerLabel">Seller (standard in New York)</span></label>
             <label><input type="radio" name="buyTransfer" value="buyer" data-bind-radio="purchase.transferTaxPayer"> Buyer</label>
           </div>
           <p class="help">On new construction and sponsor sales the buyer usually absorbs the New York State and New York City transfer tax. When the buyer pays, it capitalises into your cost basis.</p>
@@ -579,7 +579,7 @@
         </div>
 
         <div class="field">
-          <div class="switch-row">
+          <div class="switch-row" id="nycResidentRow">
             <span class="switch-text">
               <label for="f-nycResident">New York City resident for income tax</label>
               <span class="help">Turn off if you live outside the five boroughs. NYC resident income tax is around 3.876% on both rent and gains, and non-residents do not pay it.</span>
@@ -669,7 +669,7 @@
       </div>
 
       <div class="callout info" data-mode="quick">
-        <h4>Using the standard New York rates</h4>
+        <h4 id="quickRatesHeading">Using the standard New York rates</h4>
         <p>Quick estimate applies the published federal, New York State and New York City rates for tax year 2026. To type in your own rates instead, switch to <strong>Professional</strong> at the top of the page.</p>
       </div>
 
@@ -779,7 +779,7 @@
         <fieldset data-mode="pro" hidden
           <legend>Who pays the transfer tax on the sale?</legend>
           <div class="radio-row">
-            <label><input type="radio" name="sellTransfer" value="seller" data-bind-radio="sale.transferTaxPayer"> You, the seller (standard in New York)</label>
+            <label><input type="radio" name="sellTransfer" value="seller" data-bind-radio="sale.transferTaxPayer"> <span id="sellTransferSellerLabel">You, the seller (standard in New York)</span></label>
             <label><input type="radio" name="sellTransfer" value="buyer" data-bind-radio="sale.transferTaxPayer"> The buyer</label>
           </div>
         </fieldset>
@@ -1016,6 +1016,6 @@
   </div>
 </noscript>
 
-<script type="module" src="./src/app.js?v=d24704aad5"></script>
+<script type="module" src="./src/app.js?v=12f10d2547"></script>
 </body>
 </html>

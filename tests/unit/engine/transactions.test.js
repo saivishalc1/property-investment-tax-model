@@ -42,12 +42,21 @@ describe('Only researched jurisdictions are treated as modelled', () => {
   });
 
   test('every other preset is legacy and says why', () => {
-    for (const k of ['de', 'fr', 'sg', 'us-tx', 'ca-on', 'intl']) {
+    for (const k of ['de', 'fr', 'sg', 'us-tx', 'ca-on']) {
       const j = jurisdictionFor(k);
       assert.equal(j.coverage, COVERAGE.LEGACY, `${k} is legacy`);
       assert.match(j.reason, /no researched rule pack/);
       assert.match(j.reason, /rough sketch/);
     }
+  });
+
+  test('the blank template says it is blank, not that its rates are unverified', () => {
+    // "Its rates were entered by hand with no effective dates" is untrue of a
+    // template that contains no rates at all. Same coverage, different reason.
+    const j = jurisdictionFor('intl');
+    assert.equal(j.coverage, COVERAGE.LEGACY);
+    assert.match(j.reason, /blank template with no rates/);
+    assert.ok(!/entered by hand/.test(j.reason));
   });
 
   test('a legacy preset computes nothing at all rather than something wrong', () => {

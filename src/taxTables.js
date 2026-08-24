@@ -1,5 +1,31 @@
 /**
- * taxTables.js — statutory rate schedules for tax year 2026.
+ * taxTables.js — LEGACY statutory rate schedules.
+ *
+ * SUPERSEDED, AND STILL LOAD-BEARING. These tables are the original engine's
+ * rate source. They are still consulted by calculations.js for rental income
+ * tax, capital gains and depreciation recapture, so they cannot simply be
+ * deleted — but nothing new should be added here.
+ *
+ * The replacement is src/rules/, where every rate carries a jurisdiction,
+ * effective dates, a citation with an access date, a verification status and
+ * declared limitations, and is resolved through the registry rather than being
+ * reached by a function that ignores which country the property is in.
+ *
+ * TWO THINGS TO KNOW BEFORE TRUSTING ANYTHING BELOW.
+ *
+ * These tables apply UNCONDITIONALLY, whatever market the user selected. The
+ * old tablesFor() takes a filing status and nothing else, so a Japanese or
+ * British scenario is charged United States federal and New York State income
+ * tax by this file. That is the defect the rule registry was built to remove,
+ * and it is still live on the hold and sale path.
+ *
+ * The capital gains thresholds are labelled 2026 but are the 2025 figures. IRS
+ * Topic 409 had not published the 2026 schedule at the time of reading, and
+ * these were carried forward and marked "provisional". src/rules/jurisdictions/
+ * us-ny.js handles the same gap honestly instead: the 2025 table EXPIRES on
+ * 2025-12-31, so a 2026 disposal resolves to no rule and is reported as a gap.
+ *
+ * Original provenance notes follow.
  *
  * PROVENANCE. Every table below records where its numbers came from and how
  * firmly. This matters more than the numbers: a rate you cannot trace is a rate

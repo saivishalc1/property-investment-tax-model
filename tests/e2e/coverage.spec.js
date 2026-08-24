@@ -158,3 +158,70 @@ test('switching between every market raises no console errors', async ({ page })
   }
   expect(errors).toEqual([]);
 });
+
+
+test.describe('help text is written for the market being modelled', () => {
+  test('no United States tax concept appears on a UK or Japanese screen', async ({ page }) => {
+    await openApp(page);
+    await page.locator('#modePro').click();
+
+    for (const key of ['uk', 'jp']) {
+      await selectMarket(page, key);
+      const help = await page.locator('#propTypeHelp').innerText();
+      // 27.5 and 39 year lives are US MACRS. Neither country uses them, so if
+      // the figures appear at all they must appear as a disclaimer — the test
+      // is that they are never presented as applicable here.
+      if (/27\.5|39 year/.test(help)) {
+        expect(help).toMatch(/United States rules and do not apply|do not apply/);
+      }
+      expect(help).not.toMatch(/New York/);
+
+      const payer = await page.locator('#buyTransferSellerLabel').innerText();
+      expect(payer).not.toMatch(/New York/);
+
+      // The New York City residency switch has no analogue abroad.
+      await page.locator('[data-step="profile"]').click();
+      await expect(page.locator('#nycResidentRow')).toBeHidden();
+    }
+  });
+
+  test('New York keeps its own wording and its own controls', async ({ page }) => {
+    await openApp(page);
+    await page.locator('#modePro').click();
+    await selectMarket(page, 'us-nyc');
+    await expect(page.locator('#propTypeHelp')).toContainText('27.5');
+    await expect(page.locator('#buyTransferSellerLabel')).toContainText('New York');
+    await page.locator('[data-step="profile"]').click();
+    await expect(page.locator('#nycResidentRow')).toBeVisible();
+  });
+
+  test('the document title names the market being modelled', async ({ page }) => {
+    await openApp(page);
+    await selectMarket(page, 'jp');
+    await expect(page).toHaveTitle(/Japan/);
+    await selectMarket(page, 'uk');
+    await expect(page).toHaveTitle(/England/);
+  });
+});
+
+test.describe('the printed report cannot overclaim', () => {
+  test('an unresearched market does not print "Rates checked"', async ({ page }) => {
+    await openApp(page);
+    await selectMarket(page, 'us-tx');
+    await page.locator('[data-step="report"]').click();
+    const meta = page.locator('.report-meta');
+    await expect(meta).toContainText('No researched rule pack');
+    await expect(meta).not.toContainText('Rates checked');
+  });
+
+  test('a researched market prints its charges with a citation and access date', async ({ page }) => {
+    await openApp(page);
+    await selectMarket(page, 'uk');
+    await page.locator('[data-step="report"]').click();
+    const main = page.locator('main');
+    await expect(main).toContainText('Transaction taxes, from the published rules');
+    await expect(main).toContainText('SDLT');
+    await expect(main).toContainText('Where these transaction figures come from');
+    await expect(main).toContainText('read 2026-08-23');
+  });
+});

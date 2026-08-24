@@ -111,6 +111,15 @@ const DEVOLVED_NOTE = Object.freeze({
  * Always returns a descriptor — never null — because the caller must be able
  * to render something honest for every preset, including the unmodelled ones.
  */
+/**
+ * The blank template is a deliberately empty starting point, not a market with
+ * unverified rates. Telling its user that "rates were entered by hand" is
+ * simply untrue — there are no rates at all until they enter some.
+ */
+const BLANK_REASON =
+  'This is a blank template with no rates in it. Every rate is yours to enter, and nothing here has been '
+  + 'checked against any source. The rule engine computes nothing for it.';
+
 export function jurisdictionFor(presetKey) {
   const modelled = MODELLED[presetKey];
   if (modelled) {
@@ -132,7 +141,7 @@ export function jurisdictionFor(presetKey) {
     knownGaps: Object.freeze([]),
     coverage: COVERAGE.LEGACY,
     note: null,
-    reason: LEGACY_REASON,
+    reason: presetKey === 'intl' ? BLANK_REASON : LEGACY_REASON,
   });
 }
 

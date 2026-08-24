@@ -172,11 +172,30 @@ nothing here has been seen by a CPA, an attorney or an enrolled agent.
   after-tax IRR.
 - Every rate and bracket table is adjustable.
 
-**Experimental — everywhere else.** The engine is jurisdiction-neutral, and
-presets for the UAE, Saudi Arabia, India, the UK, Spain, Portugal, France,
-Germany, the Netherlands, Singapore, Australia, Japan, Hong Kong, New Zealand,
-Canada, Mexico and Brazil are included, plus a blank template. They are
-labelled **experimental** in the interface and carry a permanent warning.
+**Researched — the United Kingdom and Japan.** England and Northern Ireland
+(SDLT, income tax, capital gains, checked against HMRC) and Japan (acquisition
+tax, registration tax, income tax, the five-year capital gains line and the
+statutory depreciation table, checked against the National Tax Agency and the
+Tokyo Metropolitan Bureau of Taxation). Scotland and Wales are declared
+unsupported rather than served the English tables.
+
+**Unresearched — everywhere else.** Presets for the UAE, Saudi Arabia, India,
+Spain, Portugal, France, Germany, the Netherlands, Singapore, Australia, Hong
+Kong, New Zealand, Canada, Mexico and Brazil are included, plus a blank
+template. Their rates were entered by hand with no effective dates, no
+citations and no verification. They are labelled **unresearched** in the
+interface, carry a permanent warning, and the rule engine computes nothing for
+them — it renders a refusal rather than a number.
+
+> **A correction to an earlier claim.** This section previously said "the
+> engine is jurisdiction-neutral". It was not. `tablesFor()` in
+> `calculations.js` returned United States federal, New York State and New York
+> City brackets unconditionally, with no jurisdiction parameter, and bracket
+> mode was the default — so a Japanese scenario was charged New York State
+> income tax. That is the defect the rule registry exists to make
+> unexpressible. The transaction-tax path now resolves rules by country,
+> region, date and facts; the hold and sale path has not yet been migrated and
+> is still computed by the old US-only code.
 They are researched from public sources but **not** independently verified, and
 in several cases the engine cannot express the local rule at all — the UK's
 20% basic-rate interest credit, the Dutch Box 3 notional-return regime, and

@@ -950,3 +950,29 @@ dialog::backdrop { background: rgba(10, 12, 16, .55); }
 .engine-panel .sources li + li {
   margin-top: 0.25rem;
 }
+
+/* ------------------------------------------------------------------ *
+ * Report: sourced charges and their citations
+ * ------------------------------------------------------------------ *
+ * Citation lines carry full URLs, which are long unbroken strings. Left
+ * alone they set a minimum width wider than a 320px viewport and push the
+ * whole document sideways — the responsive suite caught exactly that.
+ */
+.report-sources,
+.report-caveats {
+  margin: 0.35rem 0 0;
+  padding-left: 1.15rem;
+  font-size: var(--step-1);
+  color: var(--text-3);
+}
+
+.report-sources li,
+.report-caveats li {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.report-sources li + li,
+.report-caveats li + li {
+  margin-top: 0.3rem;
+}
