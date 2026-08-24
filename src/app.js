@@ -3,9 +3,13 @@
  *
  * The rule this file follows without exception: no user-controlled string is
  * ever assigned to innerHTML. Every value the user typed, imported, or loaded
- * reaches the page through textContent or a property assignment. The only
- * innerHTML in the file is emptying a container (`= ''`) and the small set of
- * static SVG strings built entirely from numbers.
+ * reaches the page through textContent or a property assignment.
+ *
+ * There is now no innerHTML assignment in this file at all. The element helper
+ * carried an `html:` option for static markup which had zero call sites — an
+ * injection sink kept open for nothing — and containers are emptied by
+ * removing children rather than by assigning an empty string. A security test
+ * asserts this stays true.
  */
 
 import { computeModel, computeVariant, num } from './calculations.js';
@@ -32,7 +36,11 @@ function el(tag, attrs, children) {
     if (v === false || v === null || v === undefined) continue;
     if (k === 'class') node.className = v;
     else if (k === 'text') node.textContent = String(v);
-    else if (k === 'html') node.innerHTML = v; // static markup only, never user data
+    // There is deliberately no `html:` option. It existed as an escape hatch
+    // for static markup and had ZERO call sites, so it was an innerHTML sink
+    // kept open for nothing — the one place in the application where a future
+    // change could introduce script injection by passing the wrong variable.
+    // Anything needing markup builds it with el() and textContent.
     else if (k.startsWith('on') && typeof v === 'function') node.addEventListener(k.slice(2), v);
     else node.setAttribute(k, v === true ? '' : String(v));
   }
