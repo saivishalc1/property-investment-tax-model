@@ -125,6 +125,30 @@ export const OWNERSHIP = Object.freeze({
 export const RESIDENCY = Object.freeze({ RESIDENT: 'resident', NON_RESIDENT: 'non_resident' });
 
 /**
+ * WHAT a charge is computed on.
+ *
+ * Not every tax on a property transaction is charged on the price, and using
+ * the price for one that is not produces a confident, wrong, and completely
+ * plausible number:
+ *
+ *   CONSIDERATION   the purchase or sale price. The common case.
+ *   ASSESSED_VALUE  the value on the tax roll (Japan's 固定資産税評価額). Materially
+ *                   below market, so charging on the price overstates the tax.
+ *   LEASE_NPV       the net present value of rent over a new lease. Unrelated
+ *                   to the premium, and nil on a freehold purchase.
+ *   LOAN_AMOUNT     the sum borrowed, not the price — mortgage recording taxes.
+ *
+ * The engine refuses to evaluate a rule whose basis it has not been given,
+ * rather than substituting whichever amount is to hand.
+ */
+export const BASIS = Object.freeze({
+  CONSIDERATION: 'consideration',
+  ASSESSED_VALUE: 'assessed_value',
+  LEASE_NPV: 'lease_npv',
+  LOAN_AMOUNT: 'loan_amount',
+});
+
+/**
  * Holding-period class, where a jurisdiction charges gains differently by it.
  *
  * Japan's five-year line is the case this exists for. Which side a disposal
@@ -132,6 +156,20 @@ export const RESIDENCY = Object.freeze({ RESIDENT: 'resident', NON_RESIDENT: 'no
  * this only lets a rule declare which side it covers.
  */
 export const HOLDING_PERIOD = Object.freeze({ SHORT: 'short', LONG: 'long' });
+
+/**
+ * Will the buyer own more than one residential property after this purchase?
+ *
+ * The United Kingdom's higher rates turn on this and nothing else, and it is
+ * worth five percentage points on every band. It cannot be inferred from the
+ * property or the price — only from the buyer's other holdings — so it is a
+ * declared fact rather than something the engine guesses.
+ *
+ * This product models INVESTMENT property, so the default is ADDITIONAL. A
+ * buy-to-let purchaser who owns nothing else is the rare case, and getting it
+ * wrong in that direction understates the tax rather than overstating it.
+ */
+export const ADDITIONAL_PROPERTY = Object.freeze({ ADDITIONAL: 'additional', SOLE: 'sole' });
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -235,12 +273,18 @@ export function defineRule(raw) {
     ownership: freezeList(id, raw.applicability?.ownership, OWNERSHIP, 'ownership'),
     residency: freezeList(id, raw.applicability?.residency, RESIDENCY, 'residency'),
     holdingPeriod: freezeList(id, raw.applicability?.holdingPeriod, HOLDING_PERIOD, 'holdingPeriod'),
+    additionalProperty: freezeList(id, raw.applicability?.additionalProperty, ADDITIONAL_PROPERTY, 'additionalProperty'),
     filingStatus: raw.applicability?.filingStatus ? Object.freeze([...raw.applicability.filingStatus]) : null,
   });
 
   const component = raw.component ?? COMPONENT.PRINCIPAL;
   if (!Object.values(COMPONENT).includes(component)) {
     fail(id, `component must be one of ${Object.values(COMPONENT).join(', ')}`);
+  }
+
+  const basis = raw.basis ?? BASIS.CONSIDERATION;
+  if (!Object.values(BASIS).includes(basis)) {
+    fail(id, `basis must be one of ${Object.values(BASIS).join(', ')}`);
   }
 
   return Object.freeze({
@@ -251,6 +295,7 @@ export function defineRule(raw) {
     jurisdiction: Object.freeze({ country: j.country, region: j.region ?? null, locality: j.locality ?? null }),
     category: raw.category,
     component,
+    basis,
     method: raw.method,
     payer: raw.payer ?? null,
     taxYear: raw.taxYear,
@@ -375,6 +420,7 @@ export function appliesTo(rule, facts) {
   if (a.ownership && facts.ownership && !a.ownership.includes(facts.ownership)) return false;
   if (a.residency && facts.residency && !a.residency.includes(facts.residency)) return false;
   if (a.holdingPeriod && facts.holdingPeriod && !a.holdingPeriod.includes(facts.holdingPeriod)) return false;
+  if (a.additionalProperty && facts.additionalProperty && !a.additionalProperty.includes(facts.additionalProperty)) return false;
   if (a.filingStatus && facts.filingStatus && !a.filingStatus.includes(facts.filingStatus)) return false;
   return true;
 }
@@ -389,6 +435,7 @@ export function specificity(rule) {
   if (a.ownership) s += 1;
   if (a.residency) s += 1;
   if (a.holdingPeriod) s += 1;
+  if (a.additionalProperty) s += 1;
   if (a.filingStatus) s += 1;
   return s;
 }

@@ -22,7 +22,7 @@
  * ALL SOURCES: gov.uk, read directly 2026-08-23. URLs on each rule.
  */
 
-import { defineRule, METHOD, CATEGORY, PAYER, PROPERTY_CLASS, OWNERSHIP, RESIDENCY, COMPONENT } from '../schema.js';
+import { defineRule, METHOD, CATEGORY, PAYER, PROPERTY_CLASS, OWNERSHIP, RESIDENCY, COMPONENT, BASIS, ADDITIONAL_PROPERTY } from '../schema.js';
 import { STATUS } from '../../core/trace.js';
 
 const ACCESSED = '2026-08-23';
@@ -101,6 +101,7 @@ export const SDLT_RESIDENTIAL_STANDARD = defineRule({
     propertyClass: [PROPERTY_CLASS.RESIDENTIAL],
     residency: [RESIDENCY.RESIDENT],
     ownership: [OWNERSHIP.INDIVIDUAL],
+    additionalProperty: [ADDITIONAL_PROPERTY.SOLE],
   },
   citations: [cite('Stamp Duty Land Tax: Residential property rates', SDLT_URL)],
   lastReviewed: REVIEWED,
@@ -123,7 +124,11 @@ export const SDLT_RESIDENTIAL_ADDITIONAL = defineRule({
   currency: 'GBP',
   rounding: { scale: 0, mode: 'DOWN' },
   bands: withSurcharge(SDLT_RESIDENTIAL_BASE, 5, '+5% higher rate'),
-  applicability: { propertyClass: [PROPERTY_CLASS.RESIDENTIAL], residency: [RESIDENCY.RESIDENT] },
+  applicability: {
+    propertyClass: [PROPERTY_CLASS.RESIDENTIAL],
+    residency: [RESIDENCY.RESIDENT],
+    additionalProperty: [ADDITIONAL_PROPERTY.ADDITIONAL],
+  },
   citations: [
     cite('Stamp Duty Land Tax: Residential property rates — Higher rates for additional properties', SDLT_URL),
   ],
@@ -194,6 +199,9 @@ export const SDLT_NON_RESIDENTIAL = defineRule({
 export const SDLT_NONRES_LEASE_NPV = defineRule({
   id: 'gb-eaw.sdlt.nonresidential.lease-npv',
   component: COMPONENT.LEASE_NPV,
+  // Charged on the net present value of the rent, not on the price. Nil on a
+  // freehold purchase, and never computable from the consideration.
+  basis: BASIS.LEASE_NPV,
   name: 'SDLT — non-residential lease, net present value of rent',
   version: '2016-03-17',
   description: 'Charge on the net present value of rent payable over the life of a new non-residential lease, in addition to any charge on the premium.',

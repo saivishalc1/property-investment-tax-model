@@ -30,7 +30,7 @@
  * Bureau of Taxation (東京都主税局), read directly 2026-08-23. URLs on each rule.
  */
 
-import { defineRule, METHOD, CATEGORY, PAYER, PROPERTY_CLASS, OWNERSHIP, COMPONENT, HOLDING_PERIOD } from '../schema.js';
+import { defineRule, METHOD, CATEGORY, PAYER, PROPERTY_CLASS, OWNERSHIP, COMPONENT, HOLDING_PERIOD, BASIS } from '../schema.js';
 import { STATUS } from '../../core/trace.js';
 
 const ACCESSED = '2026-08-23';
@@ -302,6 +302,7 @@ export const ACQUISITION_TAX_LAND = defineRule({
   effectiveFrom: '2008-04-01',
   effectiveTo: '2027-03-31',
   currency: 'JPY',
+  basis: BASIS.ASSESSED_VALUE,
   rounding: { scale: 0, mode: 'DOWN' },
   // 免税点: no charge where the assessed value is below 100,000 yen.
   exemptBelow: '100000',
@@ -331,6 +332,7 @@ export const ACQUISITION_TAX_BUILDING_RESIDENTIAL = defineRule({
   effectiveFrom: '2008-04-01',
   effectiveTo: '2027-03-31',
   currency: 'JPY',
+  basis: BASIS.ASSESSED_VALUE,
   rounding: { scale: 0, mode: 'DOWN' },
   exemptBelow: '120000',
   applicability: { propertyClass: [PROPERTY_CLASS.RESIDENTIAL] },
@@ -359,6 +361,7 @@ export const ACQUISITION_TAX_BUILDING_NONRESIDENTIAL = defineRule({
   effectiveFrom: '2008-04-01',
   effectiveTo: null,
   currency: 'JPY',
+  basis: BASIS.ASSESSED_VALUE,
   rounding: { scale: 0, mode: 'DOWN' },
   exemptBelow: '120000',
   applicability: { propertyClass: [PROPERTY_CLASS.COMMERCIAL] },
@@ -383,6 +386,7 @@ export const REGISTRATION_TAX_LAND_SALE = defineRule({
   effectiveFrom: '2026-04-01',
   effectiveTo: '2029-03-31',
   currency: 'JPY',
+  basis: BASIS.ASSESSED_VALUE,
   rounding: { scale: 0, mode: 'DOWN', floorToUnit: '100' },
   applicability: { propertyClass: [PROPERTY_CLASS.LAND] },
   citations: [nta('No.7191 登録免許税の税額表', URL_REG)],
@@ -409,6 +413,7 @@ export const REGISTRATION_TAX_BUILDING_SALE = defineRule({
   effectiveFrom: '2003-04-01',
   effectiveTo: null,
   currency: 'JPY',
+  basis: BASIS.ASSESSED_VALUE,
   rounding: { scale: 0, mode: 'DOWN', floorToUnit: '100' },
   applicability: { propertyClass: [PROPERTY_CLASS.RESIDENTIAL, PROPERTY_CLASS.COMMERCIAL] },
   citations: [nta('No.7191 登録免許税の税額表', URL_REG)],
