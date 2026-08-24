@@ -9,10 +9,16 @@
 import { RuleRegistry } from './registry.js';
 import { UK_RULES, UNSUPPORTED_REGIONS as UK_UNSUPPORTED } from './jurisdictions/uk.js';
 import { JP_RULES } from './jurisdictions/jp.js';
+import { US_NY_RULES, US_NY_DECLARED_GAPS } from './jurisdictions/us-ny.js';
 
 export const registry = new RuleRegistry()
   .add(UK_RULES)
-  .add(JP_RULES);
+  .add(JP_RULES)
+  .add(US_NY_RULES);
+
+for (const gap of US_NY_DECLARED_GAPS) {
+  registry.declareUnsupported(gap);
+}
 
 for (const region of UK_UNSUPPORTED) {
   registry.declareUnsupported({

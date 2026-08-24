@@ -43,7 +43,14 @@ export function evaluateRule(rule, base, opts = {}) {
 
   // --- 1. statutory floor: below this, no charge arises at all ----------
   if (rule.exemptBelow && base.amount.lt(rule.exemptBelow)) {
-    const zero = Money.zero(rule.currency);
+    // Quantise even the nil charge to the rule's own scale. Returning a bare
+    // scale-0 zero here while every other path returns the rule's scale makes
+    // "no tax" format differently from "zero tax", which looks like a bug to a
+    // reader comparing two lines of a closing statement.
+    const zero = Money.of(
+      Decimal.of(0).rescale(rule.rounding.scale, rule.rounding.mode),
+      rule.currency,
+    );
     t.formula(`no charge below ${rule.exemptBelow.toString()}`)
       .line({ label: 'Below exemption threshold', base, amount: zero, detail: `threshold ${rule.exemptBelow.toString()}` })
       .result(zero);
@@ -74,6 +81,7 @@ export function evaluateRule(rule, base, opts = {}) {
     case METHOD.FLAT_RATE: gross = flatRate(rule, working, t); break;
     case METHOD.FIXED_AMOUNT: gross = fixedAmount(rule, working, t); break;
     case METHOD.PER_UNIT: gross = perUnit(rule, working, t, opts.quantity); break;
+    case METHOD.PER_UNIT_STEP: gross = perUnitStep(rule, working, t); break;
     default: throw new Error(`evaluateRule: unhandled method ${rule.method}`);
   }
 
@@ -230,6 +238,32 @@ function perUnit(rule, base, t, quantity) {
     label: band.label || rule.name,
     detail: `${q.toString()} units at ${band.rate.toString()} each`,
     base: Money.of(charge, rule.currency),
+    amount: Money.of(charge, rule.currency),
+  });
+  return Money.of(charge, rule.currency);
+}
+
+/**
+ * A fixed amount for each whole unit of value "or fractional part thereof".
+ *
+ * The fractional part is charged as a whole unit, so the unit count is rounded
+ * UP. This is a statutory rule, not a rounding convenience: charging the exact
+ * proportion instead understates the tax on any consideration that is not an
+ * exact multiple of the unit.
+ */
+function perUnitStep(rule, base, t) {
+  const band = rule.bands[0];
+  const { unitSize, amount } = band;
+  t.formula(`${amount.toString()} for each ${unitSize.toString()} of value, or fractional part thereof`);
+
+  const units = base.amount.divide(unitSize, 0, ROUND.CEIL);
+  const charge = units.multiply(amount);
+
+  t.line({
+    label: band.label || rule.name,
+    detail: `${base.amount.toString()} / ${unitSize.toString()} = ${base.amount.divide(unitSize, 4, ROUND.DOWN).toString()}, `
+      + `charged as ${units.toString()} whole units at ${amount.toString()} each`,
+    base,
     amount: Money.of(charge, rule.currency),
   });
   return Money.of(charge, rule.currency);

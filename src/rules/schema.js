@@ -46,6 +46,17 @@ export const METHOD = Object.freeze({
 
   /** A per-unit charge: rate x quantity (floor area, units). */
   PER_UNIT: 'PER_UNIT',
+
+  /**
+   * A fixed amount for each whole unit of value "or fractional part thereof".
+   *
+   * New York's transfer tax is two dollars for each $500 of consideration OR
+   * FRACTIONAL PART. That is not 0.4%: a $295,100 sale is charged on 591 units
+   * rather than 590.2, so the tax is $1,182 and not $1,180.40. Treating it as
+   * a percentage understates every consideration that is not an exact multiple
+   * of the unit, which is nearly all of them.
+   */
+  PER_UNIT_STEP: 'PER_UNIT_STEP',
 });
 
 const METHODS = new Set(Object.values(METHOD));
@@ -303,6 +314,18 @@ function validateBands(id, raw) {
     if (raw.rate == null) fail(id, 'FLAT_RATE requires `rate`');
     const rate = safeDecimal(id, raw.rate, 'rate');
     return Object.freeze([Object.freeze({ from: Decimal.of(0), rate, amount: null, label: raw.rateLabel || null })]);
+  }
+
+  if (method === METHOD.PER_UNIT_STEP) {
+    if (raw.unitSize == null) fail(id, 'PER_UNIT_STEP requires `unitSize`');
+    if (raw.amountPerUnit == null) fail(id, 'PER_UNIT_STEP requires `amountPerUnit`');
+    const unitSize = safeDecimal(id, raw.unitSize, 'unitSize');
+    if (!unitSize.isPositive()) fail(id, 'unitSize must be positive');
+    const amountPerUnit = safeDecimal(id, raw.amountPerUnit, 'amountPerUnit');
+    return Object.freeze([Object.freeze({
+      from: Decimal.of(0), rate: null, amount: amountPerUnit,
+      unitSize, label: raw.rateLabel || null,
+    })]);
   }
 
   if (method === METHOD.PER_UNIT) {

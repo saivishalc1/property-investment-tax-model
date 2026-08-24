@@ -52,10 +52,11 @@ describe('Cross-jurisdiction leakage is structurally impossible', () => {
   });
 
   test('an unmodelled country returns UNSUPPORTED, never a substitute', () => {
-    // The United States is not yet in the packs. The correct answer is a
-    // refusal, not New York's tables and not the United Kingdom's.
+    // France is not in the packs. The correct answer is a refusal — not the
+    // United Kingdom's tables because they are geographically nearest, and not
+    // New York's because they happen to be the most complete.
     const { rule, unsupported } = registry.resolve({
-      country: 'US', category: CATEGORY.CAPITAL_GAINS_TAX, on: '2026-06-01',
+      country: 'FR', category: CATEGORY.CAPITAL_GAINS_TAX, on: '2026-06-01',
     });
     assert.equal(rule, null);
     assert.ok(unsupported);
@@ -64,7 +65,7 @@ describe('Cross-jurisdiction leakage is structurally impossible', () => {
 
   test('require() throws rather than returning a wrong number', () => {
     assert.throws(
-      () => registry.require({ country: 'US', category: CATEGORY.CAPITAL_GAINS_TAX, on: '2026-06-01' }),
+      () => registry.require({ country: 'FR', category: CATEGORY.CAPITAL_GAINS_TAX, on: '2026-06-01' }),
       UnsupportedJurisdictionError,
     );
   });
@@ -217,12 +218,13 @@ describe('An ambiguous rule pack fails loudly', () => {
 });
 
 describe('Coverage and staleness are reportable, not folklore', () => {
-  test('coverage lists both countries and both declared gaps', () => {
+  test('coverage lists every modelled country and every declared gap', () => {
     const c = registry.coverage();
     const codes = c.countries.map((x) => x.country);
-    assert.deepEqual(codes, ['GB', 'JP']);
-    assert.equal(c.declaredUnsupported.length, 2);
-    assert.ok(c.totalRules > 15, `expected a substantive pack, got ${c.totalRules}`);
+    assert.deepEqual(codes, ['GB', 'JP', 'US']);
+    // Scotland, Wales, and the NYC supplemental transfer tax schedule.
+    assert.equal(c.declaredUnsupported.length, 3);
+    assert.ok(c.totalRules >= 27, `expected a substantive pack, got ${c.totalRules}`);
   });
 
   test('every registered rule is verified or explicitly weaker', () => {
@@ -241,7 +243,11 @@ describe('Coverage and staleness are reportable, not folklore', () => {
   });
 
   test('expired rules are reportable so a pack cannot rot unnoticed', () => {
-    assert.equal(registry.expiredRules('2026-08-23').length, 0);
+    // The 2025 US capital gains tables have genuinely expired as at today, and
+    // that is the point: they are visible rather than silently still in use.
+    const now = registry.expiredRules('2026-08-23');
+    assert.ok(now.every((r) => r.id.includes('.2025')), `unexpected expiries: ${JSON.stringify(now)}`);
+    assert.equal(now.length, 2, 'both 2025 LTCG tables are flagged expired');
     const later = registry.expiredRules('2030-01-01');
     assert.ok(later.length > 0, 'the 2026-27 UK tax year rules have expired by 2030');
   });
